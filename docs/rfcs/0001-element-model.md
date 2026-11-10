@@ -38,7 +38,7 @@ A provider answers with one tree. A notes-and-threads app with words selected in
     "id": "app", "role": "Application", "title": "Example",
     "children": [
       { "id": "w-1", "role": "Window", "subrole": "pane", "focused": true, "children": [
-        { "id": "th-2", "role": "List", "subrole": "thread", "title": "Launch plan", "children": [
+        { "id": "th-2", "role": "List", "subrole": "thread", "title": "Launch plan", "focused": true, "children": [
           { "id": "c-3", "role": "Row", "subrole": "comment", "title": "Comment by Ada", "focused": true, "children": [
             { "id": "sel-4", "role": "Text", "selected": true,
               "content": [{ "type": "text", "text": "what it shows" }] }
@@ -70,7 +70,7 @@ Out of scope: notifications when context changes, actions on an element, search 
 | `content` | no | MCP content blocks, unchanged from 0.1 |
 | `url` | no | An address for the thing |
 | `selected` | no | The user selected this. Absent means false |
-| `focused` | no | The keyboard or cursor is here. May be set at each level; the user's position is found by following focused elements down from the root. Absent means false |
+| `focused` | no | The keyboard or cursor is here. Set on every element on the path from the root's child down to the user's position, with no gaps, so the position is found by following focused elements down from the root. Absent means false |
 | `visible` | no | Drawn on screen now. Absent means the parent's value; the root is visible |
 | `children` | no | The elements inside this one, in the app's order |
 | `attributes` | no | Anything else, by name. `author` and `related` are reserved (4.3). Replaces `payload` |

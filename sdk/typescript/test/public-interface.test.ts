@@ -7,28 +7,34 @@ import { join } from "node:path";
 import { test } from "node:test";
 import type { TestContext } from "node:test";
 
-import { ContextContent, ContextDescriptor, ContextServer } from "../src/index.ts";
-import type { ContextItem, ContextProvider, ContextValue } from "../src/index.ts";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+
+import { ContextContent, ContextDescriptor, ContextResponder, ContextServer, ContextTree, contextRoles } from "../src/index.ts";
+import type { ContextElement, ContextHTTPRequest, ContextProvider, ContextValue } from "../src/index.ts";
 
 // The package as an app uses it: only the public interface, over a real
 // socket, found through the descriptor file as a host finds it. Ported
-// from the Swift package's `PublicInterfaceTests.swift`; the tests after
-// the first three are this package's own.
+// from the Swift package's `PublicInterfaceTests.swift` at draft 0.1 and
+// carried to version 0.2.0; the tests after the first three are this
+// package's own.
 
 type JSONObject = Record<string, any>;
 
 const notes: ContextProvider = {
   current: () => ({
-    focus: ["note-1"],
-    items: [{ id: "note-1", type: "note", title: "Groceries", content: [ContextContent.text("Eggs, rice")] }],
+    id: "app", role: "Application", title: "Notes",
+    children: [{ id: "w-1", role: "Window", focused: true, children: [
+      { id: "note-1", role: "Document", subrole: "note", title: "Groceries", focused: true, content: [ContextContent.text("Eggs, rice")] },
+    ] }],
   }),
 };
 
 const locatedNotes: ContextProvider = {
   // A provider may answer with a promise.
   current: async () => ({
-    focus: ["note-1"],
-    items: [{ id: "note-1", type: "note", title: "Groceries", locatable: true }],
+    id: "app", role: "Application",
+    children: [{ id: "note-1", role: "Document", subrole: "note", title: "Groceries", focused: true }],
   }),
   locate: (id) => (id === "note-1" ? { id, state: "visible", rects: [{ x: 10, y: 20, w: 300, h: 40 }] } : undefined),
 };
@@ -105,17 +111,25 @@ function documentOf(answer: JSONObject): JSONObject {
   return JSON.parse(text);
 }
 
-test("aPayloadIsWrittenAsLiterals", async (t) => {
-  const payload: { [key: string]: ContextValue } = {
+test("attributesAreWrittenAsLiterals", async (t) => {
+  const attributes: { [key: string]: ContextValue } = {
     ref: "T-12", done: false, order: 3, weight: 0.5,
     tags: ["home", "week"], lines: { start: 3, end: 4 },
+    author: "Ada", related: [{ relation: "blocks", id: "task-2" }, { relation: "source", url: "https://example.org/list" }],
   };
-  const item: ContextItem = { id: "task-1", type: "task", title: "Shop", payload };
-  const { descriptor } = await started(t, { current: () => ({ items: [item] }) });
+  const task: ContextElement = { id: "task-1", role: "Row", subrole: "task", title: "Shop", attributes };
+  const root: ContextElement = { id: "app", role: "Application", children: [task, { id: "task-2", role: "Row", subrole: "task" }] };
+  const { descriptor } = await started(t, { current: () => root });
   const current = documentOf(await call(descriptor, "resources/read", "ambient://current"));
-  assert.deepEqual(current["items"][0].payload, payload);
-  // A provider that names no focus sends an empty one.
-  assert.deepEqual(current["focus"], []);
+  assert.deepEqual(current["root"].children[0].attributes, attributes);
+  // An element with nothing in focus, selected or hovered says none of them.
+  assert.deepEqual(Object.keys(current["root"].children[1]).sort(), ["id", "role", "subrole"]);
+});
+
+test("theRoleLanguageIsThirteenWords", () => {
+  assert.equal(contextRoles.length, 13);
+  assert.equal(new Set(contextRoles).size, 13);
+  for (const role of contextRoles) assert.match(role, /^[A-Z][a-z]+$/);
 });
 
 test("aProviderThatOnlySaysWhatIsOpen", async (t) => {
@@ -125,8 +139,10 @@ test("aProviderThatOnlySaysWhatIsOpen", async (t) => {
 
   const current = documentOf(await call(descriptor, "resources/read", "ambient://current"));
   assert.equal(current["instance"], descriptor.instance);
-  assert.equal(current["app"].id, "org.example.notes");
-  assert.equal(current["items"][0].title, "Groceries");
+  assert.equal(current["protocol"], "0.2.0");
+  assert.equal(current["root"].role, "Application");
+  assert.equal(current["root"].children[0].children[0].title, "Groceries");
+  assert.deepEqual(ContextTree.check(current["root"]), []);
 
   const templates = await call(descriptor, "resources/templates/list");
   assert.deepEqual(templates["result"].resourceTemplates, []);
@@ -158,7 +174,7 @@ test("theDescriptorNamesALoopbackListenerThatIsAlreadyUp", async (t) => {
   assert.equal(server.endpoint?.href, descriptor.endpoint);
   assert.equal(server.token, descriptor.token);
   assert.equal(server.instance, descriptor.instance);
-  assert.equal(descriptor.protocol, "0.1");
+  assert.equal(descriptor.protocol, "0.2.0");
   assert.match(descriptor.started, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
   assert.equal(statSync(directory).mode & 0o777, 0o700);
   assert.equal(statSync(file).mode & 0o777, 0o600);
@@ -234,4 +250,67 @@ test("aProviderThatThrowsIsAnErrorNotACrash", async (t) => {
   const answer = await call(descriptor, "resources/read", "ambient://current");
   assert.equal(answer["error"].code, -32603);
   assert.equal((await call(descriptor, "resources/list"))["result"].resources.length, 1);
+});
+
+// MARK: - On a server the app already has (RFC-0002)
+
+test("anAppWithItsOwnServerMountsTheResponderAndWritesTheDescriptor", async (t) => {
+  const directory = join(mkdtempSync(join(tmpdir(), "acp-")), "providers");
+  const app = { id: "org.example.editor", name: "Editor", version: "3.0" };
+  const token = ContextServer.random(32), instance = ContextServer.random(6);
+  const responder = new ContextResponder({ app, instance, token, path: "/ambient", current: () => notes.current() });
+
+  // The app's server: its own routes answer as before, and one path is
+  // handed to the responder before anything else looks at it.
+  const server = createServer((incoming, outgoing) => {
+    const chunks: Buffer[] = [];
+    incoming.on("data", (chunk: Buffer) => chunks.push(chunk));
+    incoming.on("end", () => {
+      const path = (incoming.url ?? "/").split("?")[0] ?? "/";
+      if (path !== "/ambient") {
+        outgoing.writeHead(200, { "Access-Control-Allow-Origin": "*" }).end("the app's own route");
+        return;
+      }
+      const headers = new Map<string, string>();
+      for (const [name, value] of Object.entries(incoming.headers)) {
+        if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(", ") : value);
+      }
+      const request: ContextHTTPRequest = { method: incoming.method ?? "", path, headers, body: Buffer.concat(chunks) };
+      void responder.respond(request).then((answer) => outgoing.writeHead(answer.status, answer.headers).end(answer.body));
+    });
+  });
+  await new Promise<void>((resolve) => server.listen({ host: "127.0.0.1", port: 0 }, resolve));
+  const port = (server.address() as AddressInfo).port;
+  const file = ContextDescriptor.write({
+    protocol: ContextResponder.protocolVersion, app, pid: process.pid, instance, token,
+    endpoint: `http://127.0.0.1:${port}/ambient`, started: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
+  }, directory);
+  t.after(() => {
+    server.close();
+    rmSync(join(directory, ".."), { recursive: true, force: true });
+  });
+
+  // A host finds it as it finds any provider.
+  const descriptor = JSON.parse(readFileSync(file, "utf8")) as ContextDescriptor;
+  assert.equal(descriptor.endpoint, `http://127.0.0.1:${port}/ambient`);
+  assert.equal(statSync(file).mode & 0o777, 0o600);
+  const current = documentOf(await call(descriptor, "resources/read", "ambient://current"));
+  assert.equal(current["root"].children[0].children[0].title, "Groceries");
+
+  // The rules hold on that path whatever the rest of the server does.
+  const { headers, body } = message("resources/list");
+  const authorized = { ...headers, Authorization: `Bearer ${token}` };
+  const answers = [
+    await post(descriptor.endpoint, headers, body),
+    await post(descriptor.endpoint, { ...authorized, Origin: "http://localhost:3000" }, body),
+    await post(descriptor.endpoint, { Origin: "http://localhost:3000", "Access-Control-Request-Method": "POST" }, "", "OPTIONS"),
+    await post(descriptor.endpoint, authorized, body),
+  ];
+  assert.deepEqual(answers.map((answer) => answer.status), [401, 403, 403, 200]);
+  for (const answer of answers) {
+    assert.deepEqual(Object.keys(answer.headers).filter((name) => name.startsWith("access-control-")), []);
+  }
+  // The app's other routes are untouched, and need no token.
+  const other = await post(`http://127.0.0.1:${port}/`, {}, "", "GET");
+  assert.equal(other.body, "the app's own route");
 });

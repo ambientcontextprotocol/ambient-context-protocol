@@ -1,8 +1,10 @@
 # Ambient Context for TypeScript
 
-Makes a desktop app built on Node, such as an Electron app, a provider of the [Ambient Context Protocol](../../docs/protocol-v0.md), draft 0.1: it runs the local server, answers the protocol's requests and keeps the descriptor file a host finds the app by. The app writes one thing, a description of what the user has open and selected.
+Makes a desktop app built on Node, such as an Electron app, a provider of the Ambient Context Protocol, version 0.2.0: it runs the local server, answers the protocol's requests and keeps the descriptor file a host finds the app by. The app writes one thing, a tree of what the user has open and selected.
 
-It is a port of the [Swift package](../swift/README.md), name for name, and answers every request as that one does. It uses Node's standard library only and has no dependencies. It is plain TypeScript with no build step: Node 22.18 or later runs the source directly, and a bundler takes it as it is. Like the protocol's discovery, it is for macOS.
+Version 0.2.0 is defined by three accepted proposals until the specification is rewritten to match: [the element model](../../docs/rfcs/0001-element-model.md), [the shared listener](../../docs/rfcs/0002-shared-listener.md) and [the hovered state](../../docs/rfcs/0003-hovered-state.md). Discovery, transport and trust are unchanged from [the 0.1 specification](../../docs/protocol-v0.md), sections 7 and 8.
+
+It uses Node's standard library only and has no dependencies. It is plain TypeScript with no build step: Node 22.18 or later runs the source directly, and a bundler takes it as it is. Like the protocol's discovery, it is for macOS. It began as a port of the [Swift package](../swift/README.md), name for name; that package is still at 0.1, so the two differ until it is carried over.
 
 ## Add it
 
@@ -17,26 +19,63 @@ The sources import each other with `.ts` extensions, so a project that type-chec
 ## Say what is open
 
 ```ts
-import type { ContextProvider } from "@ambient-context/provider";
+import type { ContextProvider } from "ambient-context-provider";
 
 const notesContext: ContextProvider = {
   current() {
     return {
-      focus: ["note-1"],
-      items: [{ id: "note-1", type: "note", title: "Groceries", content: [{ type: "text", text: "Eggs, rice, limes" }] }],
+      id: "app", role: "Application", title: "Notes",
+      children: [{
+        id: "w-1", role: "Window", focused: true,
+        children: [{
+          id: "note-1", role: "Document", subrole: "note", title: "Groceries", focused: true,
+          content: [{ type: "text", text: "Eggs, rice, limes" }],
+          children: [{ id: "sel-1", role: "Text", selected: true, content: [{ type: "text", text: "rice" }] }],
+        }],
+      }],
     };
   },
 };
 ```
 
-An item's `payload` takes plain JSON values: `payload: { ref: "T-12", done: false }`.
+`current()` is called each time a host asks, and should answer from state already in memory. It may return the tree or a promise of it. The package adds the protocol version and the run's instance.
 
-`current()` is called each time a host asks, and should answer from state already in memory. It may return its answer or a promise of it. `focus` lists the ids of the items the user is working on now; `items` is everything open. An id is letters, digits, hyphens and underscores, and stays the same for as long as the item exists in this run of the app.
+Everything is an element, and the root is the application. What an element says about itself:
+
+| Field | Meaning |
+|---|---|
+| `id` | Letters, digits, hyphens and underscores. Unique in one answer and the same for as long as the thing is shown in this run. It names one appearance: a thread open in two panes is two elements with two ids |
+| `role` | How the thing is shown. One of thirteen words, below |
+| `subrole` | What the thing is, in the app's own word: `note`, `task`, `thread`, `pane`. Any string |
+| `title` | One line a person could read |
+| `content` | Text, an image or a link, as MCP content blocks |
+| `url` | An address for the thing |
+| `selected` | The user selected this |
+| `focused` | The keyboard or cursor is here. Mark every element on the way down to where the user is, with no gaps: the window, the document in it, the row in that |
+| `hovered` | The pointer is over this. On one element at most, the innermost one reported, and not on what contains it. Leave it out if the app does not track the pointer |
+| `visible` | Drawn on screen now. Left out, it is the parent's value. `false` on a tab that is open but not showing |
+| `children` | The elements inside this one, in the app's order |
+| `attributes` | Anything else, as plain JSON values: `attributes: { ref: "T-12", done: false }`. Two names are reserved: `author`, a string, and `related`, a list of links that are not containment, each with a relation name and another element's `id` or an address |
+
+The roles, spelled exactly so (`contextRoles` lists them):
+
+| Kind | Roles |
+|---|---|
+| The app and its windows | `Application`, `Window` |
+| Containers | `Group`, `List`, `Table` |
+| Entries | `Row`, `Cell` |
+| Text | `Text`, `Heading`, `Link` |
+| Pictures and pages | `Image`, `Page` |
+| A whole document | `Document` |
+
+The role says how a thing is shown and the subrole what it is: a task in a list is a `Row` with subrole `task`, and the same task on a board is a `Cell` with subrole `task`. A tab or a pane is a `Window` that says so in its subrole. Selected text is a `Text` with `selected: true`, inside the element it was selected in. When no role plainly fits, use `Group`. Do not report controls, menus or window furniture.
+
+Report what is useful to someone asking about what is in front of the user, not everything the app has loaded. Send `author` only where the app already shows it.
 
 ## Serve it
 
 ```ts
-import { ContextServer } from "@ambient-context/provider";
+import { ContextServer } from "ambient-context-provider";
 
 const server = new ContextServer({
   provider: notesContext,
@@ -54,9 +93,65 @@ Three things an app should do around it:
 - Call `ContextDescriptor.removeStale(bundleID, process.pid, ContextDescriptor.defaultDirectory)` at launch, whether or not the feature is on, so a descriptor left by a crash does not outlive it.
 - Call `stop()` before the app exits: in Electron, on `will-quit`. While it runs, the server also removes its descriptor when the process exits normally, but not when it is killed.
 
+## When the tree is wrong
+
+A tree can be wrong in ways a host cannot repair: an id used twice, a root that is not an `Application`, a focused element whose parent is not focused, two elements hovered. Each time it answers, the package checks the tree for the mistakes that can be told from the tree alone, and reports each distinct one once:
+
+```
+ambient context: error: element 'c-3': focused, but an element between it and the root is not: the focused path has a gap
+```
+
+A role outside the thirteen is a warning, not an error, because a host reads it as `Group`.
+
+The `check` option, on `ContextServer` and `ContextResponder`, says what happens next:
+
+| `check` | What it does |
+|---|---|
+| `"warn"` (default) | Reports through `report`, which defaults to `console.warn`, and answers anyway |
+| `"refuse"` | Also fails the read when an issue is an error. For the app's own tests |
+| `"off"` | Does not look |
+
+`ContextTree.check(root)` runs the same check directly and returns the issues, for a unit test of the function that builds the tree.
+
+## On a server the app already has
+
+An app that already runs a local server does not need a second port. It mounts the answering part, `ContextResponder`, at a path of its own and writes the descriptor itself:
+
+```ts
+import { ContextDescriptor, ContextResponder, ContextServer } from "ambient-context-provider";
+
+const app = { id: "org.example.editor", name: "Editor", version: "3.0" };
+const token = ContextServer.random(32);    // new on every launch, for this path only
+const instance = ContextServer.random(6);
+const responder = new ContextResponder({
+  app, instance, token, path: "/ambient",
+  current: () => editorContext.current(),
+});
+
+// In the app's server, before any other handling of that path:
+//   const answer = await responder.respond({ method, path, headers, body });
+// `headers` is a Map of values by lowercased name, `body` a Buffer.
+// Send answer.status, answer.headers and answer.body as they are.
+
+// Once the listener is up:
+const file = ContextDescriptor.write({
+  protocol: ContextResponder.protocolVersion, app, pid: process.pid, instance, token,
+  endpoint: `http://127.0.0.1:${port}/ambient`,
+  started: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
+}, ContextDescriptor.defaultDirectory);
+// At quit, or when the user turns the feature off: remove `file`.
+```
+
+The responder refuses any request that carries an `Origin` header, a preflight included, and any without the token, before it looks at anything else. What stays with the app, because the package cannot see it:
+
+- *The listener is on `127.0.0.1` only.* A server bound to all interfaces must not carry this path: the token would be all that stands between the user's selection and the local network.
+- *Nothing adds cross-origin headers to this path.* A framework that puts `Access-Control-Allow-Origin` on every response, or answers every preflight itself, undoes the refusal, and a test with a client that is not a browser will not show it. Route the path to the responder before such middleware.
+- *The token is used nowhere else.* It is written to the descriptor file, so it must not be a credential the server accepts for anything but this path.
+- *Neither the token nor a response's body is logged.* The body is what the user has selected.
+
 ## Say where it is (optional)
 
-A provider that can report where an item is on screen also has `locate`. A host can then place its own interface beside the item.
+A provider that can report where an element is on screen also has `locate`. A host can then place its own interface beside it.
 
 ```ts
 const notesContext: ContextProvider = {
@@ -69,12 +164,13 @@ const notesContext: ContextProvider = {
 };
 ```
 
-Return nothing for an id this run never issued, and `ContextLocation.gone(id)` for an item that was issued and no longer exists. Rectangles are in global display coordinates: points, origin at the top left of the primary display, y increasing downward. Mark an item `locatable: true` in `current()` only if `locate` can answer for it. A provider without `locate` offers no location resource, and nothing else changes.
+Return nothing for an id this run never issued, and `ContextLocation.gone(id)` for an element that was issued and no longer exists. Rectangles are in global display coordinates: points, origin at the top left of the primary display, y increasing downward. Elements do not declare in advance whether they can be located; a host asks. A provider without `locate` offers no location resource, and nothing else changes.
 
 ## Try it
 
 ```sh
-npm test   # the server, the descriptor and the public interface over a real socket
+npm test                    # the server, the tree check, the descriptor and the public interface over a real socket
+node examples/minimal.ts    # a provider a host can find, until Ctrl-C
 ```
 
 The tests run on the source with `node --test` and keep their descriptors in a temporary folder.

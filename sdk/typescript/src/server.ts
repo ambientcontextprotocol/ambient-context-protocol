@@ -5,19 +5,23 @@ import type { AddressInfo, Server, Socket } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import type { ContextContent, ContextCurrent, ContextItem, ContextLocation, ContextProvider, ContextRect } from "./provider.ts";
+import type { ContextContent, ContextElement, ContextLocation, ContextProvider, ContextRect } from "./provider.ts";
+import { ContextTree } from "./tree.ts";
+import type { ContextIssue } from "./tree.ts";
 
-// A provider for the Ambient Context Protocol, draft 0.1: a small MCP
+// A provider for the Ambient Context Protocol, version 0.2.0: a small MCP
 // server on the loopback interface that answers `current` and `locate`
 // as two resources, and the descriptor file that tells a host where it
 // is. It is handed a `ContextProvider` and knows nothing else about the
-// app it runs in. Only `ContextServer`, `ContextApp` and
-// `ContextDescriptor` are public; the layers under them are open to the
-// package's tests.
+// app it runs in.
 //
 // Three layers, each usable alone: `ContextHTTP` turns bytes into a
 // request, `ContextResponder` turns a request into a response, and
-// `ContextServer` owns the listener and the descriptor.
+// `ContextServer` owns the listener and the descriptor. An app with no
+// server of its own uses `ContextServer`. An app that already runs one on
+// the loopback interface mounts a `ContextResponder` at a path of its
+// choosing and writes the descriptor with `ContextDescriptor` (RFC-0002).
+// `ContextHTTP` is open to the package's tests.
 
 // MARK: - HTTP
 
@@ -176,8 +180,8 @@ function sortedJSON(value: unknown, indent?: number): string {
   }, indent);
 }
 
-// Only the protocol's own fields are sent, and a field an item does not
-// have is left out, not sent as null.
+// Only the protocol's own fields are sent, and a field an element does
+// not have is left out, not sent as null.
 
 function encodeContent(block: ContextContent): unknown {
   switch (block.type) {
@@ -188,16 +192,23 @@ function encodeContent(block: ContextContent): unknown {
   }
 }
 
-function encodeItem(item: ContextItem): unknown {
+// `selected`, `focused` and `hovered` are false when absent, so only true
+// is sent. `visible` is the parent's value when absent, so either value a
+// provider gave is sent.
+function encodeElement(element: ContextElement): unknown {
   return {
-    id: item.id,
-    type: item.type,
-    title: item.title,
-    content: item.content?.map(encodeContent),
-    url: item.url ?? undefined,
-    parent: item.parent ?? undefined,
-    locatable: item.locatable ?? undefined,
-    payload: item.payload ?? undefined,
+    id: element.id,
+    role: element.role,
+    subrole: element.subrole ?? undefined,
+    title: element.title ?? undefined,
+    content: element.content?.map(encodeContent),
+    url: element.url ?? undefined,
+    selected: element.selected === true ? true : undefined,
+    focused: element.focused === true ? true : undefined,
+    hovered: element.hovered === true ? true : undefined,
+    visible: typeof element.visible === "boolean" ? element.visible : undefined,
+    children: element.children && element.children.length > 0 ? element.children.map(encodeElement) : undefined,
+    attributes: element.attributes ?? undefined,
   };
 }
 
@@ -224,22 +235,47 @@ export interface ContextResponderOptions {
   app: ContextApp;
   instance: string;
   token: string;
-  current: () => ContextCurrent | Promise<ContextCurrent>;
+  /** The tree, rooted at an `Application`. */
+  current: () => ContextElement | Promise<ContextElement>;
   /**
    * Absent for a provider that does not report positions: the location
    * template is then not offered and no location can be read.
    */
   locate?: ((id: string) => ContextLocation | null | undefined | Promise<ContextLocation | null | undefined>) | undefined;
+  /**
+   * The one path this responder answers. Defaults to `/mcp`, which is
+   * what `ContextServer` listens on. An app that mounts the responder on
+   * its own server names the path it mounted it at.
+   */
+  path?: string;
+  /**
+   * What to do when the provider's tree breaks a rule that can be told
+   * from the tree (`ContextTree.check`). `warn`, the default, reports
+   * each distinct issue once through `report` and answers anyway.
+   * `refuse` answers with an error when an issue is an error, for an
+   * app's own tests. `off` does not look.
+   */
+  check?: "warn" | "refuse" | "off";
+  /** Where issues go. Defaults to `console.warn`. */
+  report?: (issue: ContextIssue) => void;
 }
 
 /**
  * Answers one HTTP request as an MCP server offering the protocol's two
- * resources. Stateless: everything it needs arrives with the request,
- * and the two functions reach the app.
+ * resources: one request in, one response out, with the `Origin` refusal
+ * and the token checked here. Everything it needs arrives with the
+ * request, and the two functions reach the app.
+ *
+ * On a server the app already has, hand it every request for its path
+ * before any other handling, and send its response as it is: it never
+ * carries an `Access-Control-Allow-*` header, and nothing else may add
+ * one. The token is for this path only. Neither it nor a response's body
+ * belongs in a log.
  */
 export class ContextResponder {
-  static readonly protocolVersion = "0.1";
+  static readonly protocolVersion = "0.2.0";
   static readonly extensionID = "org.humanitas/ambient-context";
+  /** The path used when none is given. */
   static readonly endpointPath = "/mcp";
   static readonly currentURI = "ambient://current";
   static readonly locationPrefix = "ambient://location/";
@@ -254,6 +290,10 @@ export class ContextResponder {
   token: string;
   current: ContextResponderOptions["current"];
   locate: ContextResponderOptions["locate"];
+  path: string;
+  check: "warn" | "refuse" | "off";
+  report: (issue: ContextIssue) => void;
+  #reported = new Set<string>();
 
   constructor(options: ContextResponderOptions) {
     this.app = options.app;
@@ -261,6 +301,14 @@ export class ContextResponder {
     this.token = options.token;
     this.current = options.current;
     this.locate = options.locate;
+    this.path = options.path ?? ContextResponder.endpointPath;
+    if (!this.path.startsWith("/") || this.path.includes("?") || this.path.includes("#")) {
+      throw new TypeError(`ContextResponder: the path '${this.path}' must start with '/' and carry no query or fragment`);
+    }
+    this.check = options.check ?? "warn";
+    this.report = options.report ?? ((issue) => {
+      console.warn(`ambient context: ${issue.severity}: element '${issue.element}': ${issue.message}`);
+    });
   }
 
   async respond(request: ContextHTTPRequest): Promise<ContextHTTPResponse> {
@@ -273,7 +321,7 @@ export class ContextResponder {
     if (authorization === undefined || !sameBytes(authorization, `Bearer ${this.token}`)) {
       return response(401, { "WWW-Authenticate": "Bearer" });
     }
-    if (request.path !== ContextResponder.endpointPath) return response(404);
+    if (request.path !== this.path) return response(404);
     if (request.method !== "POST") return response(405, { Allow: "POST" });
 
     let message: unknown;
@@ -352,8 +400,8 @@ export class ContextResponder {
       const templates = this.locate ? [{
         uriTemplate: ContextResponder.locationTemplate,
         name: "location",
-        title: "Location of an item",
-        description: "Where an item from the current context is on screen.",
+        title: "Location of an element",
+        description: "Where an element from the current context is on screen.",
         mimeType: "application/json",
       }] : [];
       return success(id, legacy, { resourceTemplates: templates });
@@ -377,12 +425,12 @@ export class ContextResponder {
    */
   private async read(uri: string): Promise<string | undefined> {
     if (uri === ContextResponder.currentURI) {
-      const answer = await this.current();
+      const root = await this.current();
+      this.#inspect(root);
       return sortedJSON({
-        app: { id: this.app.id, name: this.app.name },
+        protocol: ContextResponder.protocolVersion,
         instance: this.instance,
-        focus: answer.focus ?? [],
-        items: (answer.items ?? []).map(encodeItem),
+        root: encodeElement(root),
       });
     }
     if (!this.locate || !uri.startsWith(ContextResponder.locationPrefix)) return undefined;
@@ -392,14 +440,30 @@ export class ContextResponder {
     } catch {
       return undefined;
     }
-    if (!ContextResponder.isItemID(id)) return undefined;
+    if (!ContextTree.isElementID(id)) return undefined;
     const location = await this.locate(id);
     return location ? sortedJSON(encodeLocation(location)) : undefined;
   }
 
-  /** Letters, digits, hyphens and underscores, as the protocol allows. */
-  static isItemID(id: string): boolean {
-    return /^[A-Za-z0-9_-]{1,128}$/.test(id);
+  /**
+   * Applies the `check` setting to a provider's answer. Throws only under
+   * `refuse`, and then the read fails as any error in the app's own
+   * function does.
+   */
+  #inspect(root: ContextElement): void {
+    if (this.check === "off") return;
+    const issues = ContextTree.check(root);
+    for (const issue of issues) {
+      const key = `${issue.severity}\u0000${issue.element}\u0000${issue.message}`;
+      if (this.#reported.has(key)) continue;
+      // An app whose ids change every answer would otherwise fill this.
+      if (this.#reported.size >= 1000) this.#reported.clear();
+      this.#reported.add(key);
+      this.report(issue);
+    }
+    if (this.check === "refuse" && issues.some((issue) => issue.severity === "error")) {
+      throw new Error("the provider's tree breaks the protocol's rules");
+    }
   }
 
   /**
@@ -519,8 +583,10 @@ export const ContextDescriptor = {
 
   /**
    * Writes the file where only the user can read it, under a temporary
-   * name first so a host never reads half of it. Returns its path.
-   * Internal: `ContextServer` calls it.
+   * name first so a host never reads half of it. Returns its path, which
+   * the caller removes when the provider stops. `ContextServer` calls it;
+   * so does an app that mounts a `ContextResponder` on its own listener,
+   * once that listener is up, with `endpoint` naming the mounted path.
    */
   write(descriptor: ContextDescriptor, directory: string): string {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
@@ -591,6 +657,10 @@ export interface ContextServerOptions {
   app: ContextApp;
   /** Where the descriptor is kept. Defaults to `ContextDescriptor.defaultDirectory`. */
   directory?: string;
+  /** As `ContextResponderOptions.check`. */
+  check?: "warn" | "refuse" | "off";
+  /** As `ContextResponderOptions.report`. */
+  report?: (issue: ContextIssue) => void;
 }
 
 /**
@@ -601,6 +671,8 @@ export class ContextServer {
   #provider: ContextProvider;
   #app: ContextApp;
   #directory: string;
+  #check: ContextServerOptions["check"];
+  #report: ContextServerOptions["report"];
   #listener: Server | undefined;
   #ready: Promise<void> | undefined;
   #descriptorPath: string | undefined;
@@ -613,6 +685,8 @@ export class ContextServer {
     this.#provider = options.provider;
     this.#app = { id: options.app.id, name: options.app.name, version: options.app.version };
     this.#directory = options.directory ?? ContextDescriptor.defaultDirectory;
+    this.#check = options.check;
+    this.#report = options.report;
   }
 
   /** The endpoint, once the listener is up. */
@@ -642,6 +716,8 @@ export class ContextServer {
       app: this.#app, instance, token,
       current: () => provider.current(),
       locate,
+      ...(this.#check ? { check: this.#check } : {}),
+      ...(this.#report ? { report: this.#report } : {}),
     });
 
     const listener = createServer({ allowHalfOpen: true }, (socket) => serve(socket, responder));

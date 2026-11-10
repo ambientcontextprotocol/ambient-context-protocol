@@ -4,14 +4,17 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { test } from "node:test";
 
-import type { ContextItem } from "../src/provider.ts";
+import type { ContextElement } from "../src/provider.ts";
 import { ContextLocation } from "../src/provider.ts";
 import { ContextDescriptor, ContextHTTP, ContextResponder, ContextServer } from "../src/server.ts";
-import type { ContextHTTPRequest, ContextHTTPResponse } from "../src/server.ts";
+import type { ContextHTTPRequest, ContextHTTPResponse, ContextResponderOptions } from "../src/server.ts";
+import { ContextTree } from "../src/tree.ts";
+import type { ContextIssue } from "../src/tree.ts";
 
 // The provider's server, without a socket: bytes to a request, a request
 // to a response, and the descriptor file. Ported from the Swift package's
-// `ServerTests.swift`, test for test and under the same names.
+// `ServerTests.swift` at draft 0.1, test for test and under the same
+// names, then carried to version 0.2.0: `current` answers with a tree.
 
 // MARK: - Fixtures
 
@@ -19,22 +22,28 @@ type JSONObject = Record<string, any>;
 
 const token = "test-token";
 
-const selection: ContextItem = {
-  id: "sel-23", type: "selection", title: "Selection in draft.md",
+const selection: ContextElement = {
+  id: "sel-23", role: "Text", selected: true,
   content: [{ type: "text", text: "The command line lasted thirty years." }],
-  parent: "doc-1", locatable: true,
-  payload: { lines: { start: 3, end: 3 } },
+  attributes: { lines: { start: 3, end: 3 } },
 };
-const draft: ContextItem = {
-  id: "doc-1", type: "document", title: "draft.md", url: "file:///Users/ada/essays/draft.md",
+const draft: ContextElement = {
+  id: "doc-1", role: "Document", title: "draft.md", url: "file:///Users/ada/essays/draft.md",
+  focused: true, children: [selection],
+};
+const notes: ContextElement = { id: "doc-2", role: "Document", subrole: "note", title: "notes.md", visible: false, selected: false };
+const editor: ContextElement = {
+  id: "app", role: "Application", title: "Editor",
+  children: [{ id: "w-1", role: "Window", focused: true, children: [draft, notes] }],
 };
 
-function makeResponder(locate = true): ContextResponder {
+function makeResponder(locate = true, more: Partial<ContextResponderOptions> = {}): ContextResponder {
   return new ContextResponder({
     app: { id: "org.example.editor", name: "Editor", version: "2.3.0" },
     instance: "k3f9x2",
     token,
-    current: () => ({ focus: ["sel-23"], items: [draft, selection] }),
+    current: () => editor,
+    ...more,
     locate: locate ? (id) => {
       switch (id) {
         case "sel-23":
@@ -182,7 +191,7 @@ test("discoverDeclaresTheExtension", async () => {
   assert.equal(value["resultType"], "complete");
   assert.equal(value["supportedVersions"][0], "2026-07-28");
   assert.deepEqual(value["capabilities"].resources, {});
-  assert.deepEqual(value["capabilities"].extensions["org.humanitas/ambient-context"], { version: "0.1" });
+  assert.deepEqual(value["capabilities"].extensions["org.humanitas/ambient-context"], { version: "0.2.0" });
   assert.deepEqual(value["_meta"]["io.modelcontextprotocol/serverInfo"], { name: "Editor", version: "2.3.0" });
 });
 
@@ -195,24 +204,41 @@ test("theResourceAndTheTemplateAreListed", async () => {
   assert.deepEqual(templates["resourceTemplates"].map((entry: JSONObject) => entry["uriTemplate"]), ["ambient://location/{id}"]);
 });
 
-test("currentReturnsTheAppTheInstanceAndTheItems", async () => {
+test("currentReturnsTheProtocolTheInstanceAndTheTree", async () => {
   const uri = "ambient://current";
   const current = documentOf(await responder.respond(request("resources/read", { params: { uri } })), uri);
-  assert.deepEqual(current["app"], { id: "org.example.editor", name: "Editor" });
+  assert.deepEqual(Object.keys(current).sort(), ["instance", "protocol", "root"]);
+  assert.equal(current["protocol"], "0.2.0");
   assert.equal(current["instance"], "k3f9x2");
-  assert.deepEqual(current["focus"], ["sel-23"]);
 
-  const items = current["items"];
-  assert.equal(items.length, 2);
-  assert.equal(items[0].id, "doc-1");
-  assert.equal(items[0].url, "file:///Users/ada/essays/draft.md");
-  // Fields an item does not have are left out, not sent as null.
-  assert.deepEqual(Object.keys(items[0]).sort(), ["id", "title", "type", "url"]);
+  const root = current["root"];
+  assert.deepEqual([root.id, root.role, root.title], ["app", "Application", "Editor"]);
+  // Fields an element does not have are left out, not sent as null.
+  assert.deepEqual(Object.keys(root).sort(), ["children", "id", "role", "title"]);
 
-  assert.equal(items[1].parent, "doc-1");
-  assert.equal(items[1].locatable, true);
-  assert.deepEqual(items[1].content, [{ type: "text", text: "The command line lasted thirty years." }]);
-  assert.deepEqual(items[1].payload, { lines: { start: 3, end: 3 } });
+  const window = root.children[0];
+  assert.deepEqual(Object.keys(window).sort(), ["children", "focused", "id", "role"]);
+  const [document, other] = window.children;
+  assert.equal(document.url, "file:///Users/ada/essays/draft.md");
+  assert.equal(document.focused, true);
+
+  const text = document.children[0];
+  assert.deepEqual(Object.keys(text).sort(), ["attributes", "content", "id", "role", "selected"]);
+  assert.equal(text.selected, true);
+  assert.deepEqual(text.content, [{ type: "text", text: "The command line lasted thirty years." }]);
+  assert.deepEqual(text.attributes, { lines: { start: 3, end: 3 } });
+
+  // A state that is false when absent is sent only when true; `visible`,
+  // which is the parent's value when absent, is sent as given.
+  assert.deepEqual(other, { id: "doc-2", role: "Document", subrole: "note", title: "notes.md", visible: false });
+});
+
+test("onlyTheProtocolsOwnFieldsAreSent", async () => {
+  const stray = { id: "app", role: "Application", type: "app", parent: "x", children: [{ id: "g-1", role: "Group", payload: { a: 1 }, hovered: true, children: [] }] };
+  const sent = makeResponder(false, { current: () => stray as unknown as ContextElement });
+  const uri = "ambient://current";
+  const current = documentOf(await sent.respond(request("resources/read", { params: { uri } })), uri);
+  assert.deepEqual(current["root"], { id: "app", role: "Application", children: [{ id: "g-1", role: "Group", hovered: true }] });
 });
 
 test("locateReturnsTheRectangles", async () => {
@@ -253,7 +279,7 @@ test("aProviderWithoutLocateOffersNoTemplate", async () => {
 test("aProviderWithoutLocateStillAnswersCurrent", async () => {
   const uri = "ambient://current";
   const current = documentOf(await withoutLocate.respond(request("resources/read", { params: { uri } })), uri);
-  assert.equal(current["items"].length, 2);
+  assert.equal(current["root"].children[0].children.length, 2);
 });
 
 test("aProviderWithoutLocateHasNoLocations", async () => {
@@ -368,12 +394,12 @@ test("anEncodedNameHeaderIsDecodedBeforeComparing", async () => {
 });
 
 test("itemIdsAreLettersDigitsHyphensAndUnderscores", () => {
-  assert.ok(ContextResponder.isItemID("sel-23"));
-  assert.ok(ContextResponder.isItemID("Doc_1"));
-  assert.ok(!ContextResponder.isItemID(""));
-  assert.ok(!ContextResponder.isItemID("a/b"));
-  assert.ok(!ContextResponder.isItemID("sél"));
-  assert.ok(!ContextResponder.isItemID("a".repeat(129)));
+  assert.ok(ContextTree.isElementID("sel-23"));
+  assert.ok(ContextTree.isElementID("Doc_1"));
+  assert.ok(!ContextTree.isElementID(""));
+  assert.ok(!ContextTree.isElementID("a/b"));
+  assert.ok(!ContextTree.isElementID("sél"));
+  assert.ok(!ContextTree.isElementID("a".repeat(129)));
 });
 
 // MARK: - Older clients
@@ -399,7 +425,7 @@ test("theOlderHandshakeIsAnswered", async () => {
   assert.deepEqual(value["serverInfo"], { name: "Editor", version: "2.3.0" });
   assert.equal("resultType" in value, false);
   assert.deepEqual(value["capabilities"].resources, {});
-  assert.deepEqual(value["capabilities"].experimental, { "org.humanitas/ambient-context": { version: "0.1" } });
+  assert.deepEqual(value["capabilities"].experimental, { "org.humanitas/ambient-context": { version: "0.2.0" } });
 
   // A revision this server does not know is answered with one it does.
   const unknown = result(await responder.respond(legacy("initialize", { protocolVersion: "2030-01-01" }, null)));
@@ -449,7 +475,7 @@ function temporaryDirectory(): string {
 
 function descriptor(pid: number): ContextDescriptor {
   return {
-    protocol: "0.1", app: { id: "org.example.editor", name: "Editor", version: "2.3.0" },
+    protocol: "0.2.0", app: { id: "org.example.editor", name: "Editor", version: "2.3.0" },
     pid, instance: "k3f9x2", endpoint: "http://127.0.0.1:53124/mcp", token: "secret",
     started: "2026-11-09T21:14:03Z",
   };
@@ -470,7 +496,7 @@ test("theDescriptorIsWrittenPrivateWithItsSevenFields", (t) => {
 
   const written = JSON.parse(readFileSync(path, "utf8"));
   assert.deepEqual(Object.keys(written).sort(), ["app", "endpoint", "instance", "pid", "protocol", "started", "token"]);
-  assert.equal(written.protocol, "0.1");
+  assert.equal(written.protocol, "0.2.0");
   assert.equal(written.pid, 48211);
   assert.equal(written.endpoint, "http://127.0.0.1:53124/mcp");
   assert.deepEqual(written.app, { id: "org.example.editor", name: "Editor", version: "2.3.0" });
@@ -511,4 +537,124 @@ test("tokensAreLongRandomAndSafeInAHeader", () => {
   assert.notEqual(first, second);
   assert.equal(first.length, 43);
   assert.match(first, /^[A-Za-z0-9_-]+$/);
+});
+
+// MARK: - A responder on a listener the app already has (RFC-0002)
+
+test("aMountedResponderAnswersOnlyItsOwnPath", async () => {
+  const mounted = makeResponder(true, { path: "/ambient" });
+  assert.equal((await mounted.respond(request("resources/list", { path: "/ambient" }))).status, 200);
+  assert.equal((await mounted.respond(request("resources/list", { path: "/mcp" }))).status, 404);
+  assert.equal((await mounted.respond(request("resources/list", { path: "/ambient/" }))).status, 404);
+  // The path is not learned without the token.
+  assert.equal((await mounted.respond(request("resources/list", { path: "/mcp", token: null }))).status, 401);
+});
+
+test("aMountedPathRefusesOriginAndPreflightAndNeverGrantsCrossOrigin", async () => {
+  const mounted = makeResponder(true, { path: "/ambient" });
+  const origin = { Origin: "http://localhost:3000" };
+  const preflight: ContextHTTPRequest = {
+    method: "OPTIONS", path: "/ambient", body: Buffer.alloc(0),
+    headers: new Map([["origin", "http://localhost:3000"], ["access-control-request-method", "POST"], ["access-control-request-headers", "authorization"]]),
+  };
+  const answers = [
+    await mounted.respond(preflight),
+    await mounted.respond(request("resources/list", { path: "/ambient", extraHeaders: { origin: origin.Origin } })),
+    await mounted.respond(request("resources/list", { path: "/ambient", token: null })),
+    await mounted.respond(request("resources/list", { path: "/ambient", httpMethod: "OPTIONS" })),
+    await mounted.respond(request("resources/list", { path: "/ambient" })),
+  ];
+  assert.deepEqual(answers.map((answer) => answer.status), [403, 403, 401, 405, 200]);
+  for (const answer of answers) {
+    assert.deepEqual(Object.keys(answer.headers).filter((name) => name.toLowerCase().startsWith("access-control-")), []);
+  }
+});
+
+test("aPathMustBeAPath", () => {
+  for (const path of ["ambient", "", "/ambient?x=1", "/ambient#x"]) {
+    assert.throws(() => makeResponder(true, { path }), TypeError, path);
+  }
+});
+
+// MARK: - The tree's rules (RFC-0001 section 7, RFC-0003)
+
+const el = (id: string, role: string, more: Partial<ContextElement> = {}): ContextElement => ({ id, role, ...more } as ContextElement);
+const messages = (root: ContextElement): string[] => ContextTree.check(root).map((issue) => `${issue.severity} ${issue.element}`);
+
+test("aCorrectTreeHasNoIssues", () => {
+  assert.deepEqual(ContextTree.check(editor), []);
+  assert.deepEqual(ContextTree.check(el("app", "Application")), []);
+  // The root may be marked or not; the path starts at its children.
+  assert.deepEqual(ContextTree.check(el("app", "Application", { focused: true, children: [el("w", "Window", { focused: true })] })), []);
+  // A hovered element need not be focused, and its ancestors are not hovered.
+  assert.deepEqual(ContextTree.check(el("app", "Application", { children: [
+    el("w-1", "Window", { focused: true }),
+    el("w-2", "Window", { children: [el("r", "Row", { hovered: true, selected: true })] }),
+  ] })), []);
+});
+
+test("theRootIsAnApplicationAndNothingElseIs", () => {
+  assert.deepEqual(messages(el("w", "Window")), ["error w"]);
+  assert.deepEqual(messages(el("app", "Application", { children: [el("inner", "Application")] })), ["error inner"]);
+});
+
+test("anIdIsWellFormedAndUsedOnce", () => {
+  const root = el("app", "Application", { children: [el("a", "Group"), el("a", "Group"), el("a/b", "Group"), el("", "Group")] });
+  assert.deepEqual(messages(root), ["error a", "error a/b", "error "]);
+  const missing = { role: "Application" } as unknown as ContextElement;
+  assert.deepEqual(messages(missing), ["error "]);
+});
+
+test("aRoleOutsideTheLanguageIsAWarning", () => {
+  const issues = ContextTree.check(el("app", "Application", { children: [el("t", "thread"), el("g", "group")] }));
+  assert.deepEqual(issues.map((issue) => [issue.severity, issue.element]), [["warning", "t"], ["warning", "g"]]);
+  assert.match(issues[0]?.message ?? "", /read as 'Group'/);
+});
+
+test("theFocusedPathHasNoGapAndNoFork", () => {
+  const gap = el("app", "Application", { children: [el("w", "Window", { children: [el("l", "List", { focused: true })] })] });
+  assert.deepEqual(messages(gap), ["error l"]);
+  const deepGap = el("app", "Application", { children: [el("w", "Window", { focused: true, children: [el("l", "List", { children: [el("r", "Row", { focused: true })] })] })] });
+  assert.deepEqual(messages(deepGap), ["error r"]);
+  const fork = el("app", "Application", { children: [el("w-1", "Window", { focused: true }), el("w-2", "Window", { focused: true })] });
+  assert.deepEqual(messages(fork), ["error w-2"]);
+});
+
+test("atMostOneElementIsHovered", () => {
+  const two = el("app", "Application", { children: [el("a", "Row", { hovered: true }), el("b", "Row", { hovered: true }), el("c", "Row", { hovered: true })] });
+  assert.deepEqual(messages(two), ["error b"]);
+  const ancestor = el("app", "Application", { children: [el("l", "List", { hovered: true, children: [el("r", "Row", { hovered: true })] })] });
+  assert.deepEqual(messages(ancestor), ["error r"]);
+});
+
+test("issuesAreReportedOnceAndTheAnswerStillGoesOut", async () => {
+  const heard: ContextIssue[] = [];
+  const wrong = el("app", "Application", { children: [el("t", "thread"), el("t", "List")] });
+  const warned = makeResponder(false, { current: () => wrong, report: (issue) => heard.push(issue) });
+  const uri = "ambient://current";
+  for (let i = 0; i < 3; i++) {
+    const current = documentOf(await warned.respond(request("resources/read", { params: { uri } })), uri);
+    // An unknown role is sent as the provider gave it; the receiver reads it as Group.
+    assert.equal(current["root"].children[0].role, "thread");
+  }
+  assert.deepEqual(heard.map((issue) => issue.severity), ["warning", "error"]);
+});
+
+test("refuseFailsTheReadOnAnErrorButNotOnAWarning", async () => {
+  const heard: ContextIssue[] = [];
+  const report = (issue: ContextIssue): void => { heard.push(issue); };
+  const uri = "ambient://current";
+  const duplicate = makeResponder(false, { check: "refuse", report, current: () => el("app", "Application", { children: [el("a", "Row"), el("a", "Row")] }) });
+  const refused = await duplicate.respond(request("resources/read", { params: { uri } }));
+  assert.equal(refused.status, 500);
+  assert.equal(errorCode(refused), -32603);
+  const unknown = makeResponder(false, { check: "refuse", report, current: () => el("app", "Application", { children: [el("a", "thread")] }) });
+  assert.equal((await unknown.respond(request("resources/read", { params: { uri } }))).status, 200);
+  assert.equal(heard.length, 2);
+});
+
+test("offDoesNotLook", async () => {
+  const silent = makeResponder(false, { check: "off", report: () => assert.fail("reported"), current: () => el("w", "Window") });
+  const uri = "ambient://current";
+  assert.equal((await silent.respond(request("resources/read", { params: { uri } }))).status, 200);
 });

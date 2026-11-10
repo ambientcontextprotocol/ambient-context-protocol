@@ -21,7 +21,6 @@ Last updated: `2026.11.09`
    - [3.8 — Host](#38--host)
 4. [Verifications](#4-verifications)
 5. [Coverage](#5-coverage)
-6. [Outside this product](#6-outside-this-product)
 
 ---
 
@@ -29,7 +28,7 @@ Last updated: `2026.11.09`
 
 1. *The app says where; the host decides what.* A provider reports items and their positions. It never names what the host draws there.
 2. *An envelope, not a domain model.* The protocol fixes the shape of an item and leaves its type and payload to the app. A text editor, a task tracker and a design tool all fit without the protocol knowing what a document, a task or a frame is.
-3. *Pulled on the user's action.* A host asks for context when the user does something that calls for it. A provider does not push, and a host does not poll.
+3. *Pulled on the user's action.* A host asks for context when the user does something that calls for it. A provider does not push, and a host does not poll. Provisional: this holds for version 0.1 and may change.
 4. *Any MCP client can use it.* The first binding is ordinary MCP tools. A client that has never heard of the protocol can still call them.
 5. *Costs an app a day, not a month.* A provider is a small local server, one file on disk and two tools. No SDK is required.
 
@@ -243,17 +242,3 @@ Twelve of the 35 Requirements at P0 have a Verification. The 23 without one:
 Most of the provider-side gaps close with one schema check: validate a `context_current` and a `context_locate` response against a published JSON Schema (PR-002, PR-003, PR-005, PR-011, PR-018, PR-024, PR-027). That check is the start of a conformance suite another app's author could run, which matters if this is to become a standard.
 
 The three Host gaps (PR-035 to PR-037) are the hardest to verify from outside. A protocol cannot enforce what a host does with context it has received; these are rules of conduct a host claims to follow. I recommend keeping them as Requirements and marking their Verifications as inspections of the host, not automated checks.
-
----
-
-## 6. Outside this product
-
-Three lines from the plan's "Done when" list are not Requirements of the protocol.
-
-| Plan line | What it says | Where it belongs |
-|---|---|---|
-| 7 | Selecting text in Paper, pressing the hotkey and pressing ⌘Return opens the aside beside the selection, and the agent's turn contains the `<context>` block | Sirius, as Features that consume the protocol: context in the message, the composer chip, aside placement |
-| 8 | `sirius display aside --anchor <id> "<brief>"` opens the aside beside that item and falls back to the default spot when the id is gone | Sirius |
-| 10 | Both test suites pass | A build gate for Paper and Sirius, not a Requirement |
-
-Under the ontology these are Features of the Sirius Product, each with its own Requirements and Verifications. Paper's side is thinner: Paper adds one Feature of its own, the `ambient.context` setting, and otherwise is a provider that must satisfy the Requirements above.

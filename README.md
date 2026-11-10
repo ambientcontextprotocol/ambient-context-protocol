@@ -60,7 +60,7 @@ A running provider announces itself with a descriptor file that only the user ca
 
 1. *The app says where; the host decides what.* A provider reports items and their positions. It never names what the host draws there.
 2. *An envelope, not a domain model.* The protocol fixes the shape of an item and leaves its type and payload to the app.
-3. *Pulled on the user's action.* A host asks for context when the user does something that calls for it.
+3. *Pulled on the user's action.* A host asks for context when the user does something that calls for it. Provisional in 0.1.
 4. *Any MCP client can use it.* The operations are ordinary MCP tools.
 5. *Costs an app a day, not a month.* A provider is a small local server, one file on disk and two tools. No SDK is required.
 

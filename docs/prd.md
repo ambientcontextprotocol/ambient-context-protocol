@@ -27,7 +27,7 @@ Last updated: `2026.11.09`
 
 ## Principles
 
-1. **The app says where; the host decides what.** A provider reports items and their positions. It never names what the host draws there. "Aside" is a Sirius word and does not appear in the protocol.
+1. **The app says where; the host decides what.** A provider reports items and their positions. It never names what the host draws there.
 
 2. **An envelope, not a domain model.** The protocol fixes the shape of an item and leaves its type and payload to the app. A text editor, a task tracker and a design tool all fit without the protocol knowing what a document, a task or a frame is.
 

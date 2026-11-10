@@ -1,7 +1,5 @@
 # RFC-NNNN — Title
 
-Last updated: `YYYY.MM.DD`
-
 > One-line summary of the proposal.
 
 | Field | Value |
@@ -9,6 +7,7 @@ Last updated: `YYYY.MM.DD`
 | Author | {Name or handle} |
 | Status | Draft |
 | Created | `YYYY.MM.DD` |
+| Decided | {Left empty by the author. A maintainer fills the date of the decision} |
 | Discussion | {Link to the pull request, issue or discussion} |
 | Specification sections | {Sections of docs/protocol-v0.md this changes} |
 | Version effect | {Breaking, additive or none; see the process, section 6} |

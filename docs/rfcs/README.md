@@ -23,7 +23,7 @@ When in doubt, ask whether an implementation written before the change would sti
 | 1. Discuss | Raise the idea in an issue or discussion. Optional, and recommended before writing | Anyone |
 | 2. Draft | Copy [the template](0000-template.md) to `docs/rfcs/NNNN-short-title.md`, taking the next unused number in [the index](index.md). Open a pull request that adds the file with status Draft and a row in the index | The author |
 | 3. Review | Discussion happens on the pull request. The author keeps the RFC current, so that the document, not the comment history, states the proposal | Anyone |
-| 4. Decide | A maintainer records the outcome in section 9 of the RFC and sets its status. An accepted or provisional RFC is merged. A declined one is merged too, with its reason, so the number and the reasoning are kept | A maintainer |
+| 4. Decide | A maintainer records the outcome in section 10 of the RFC, sets its status and fills "Decided" with the date. An accepted or provisional RFC is merged. A declined one is merged too, with its reason, so the number and the reasoning are kept | A maintainer |
 | 5. Land | A separate pull request changes the specification, the version, the changelog, the SDKs and the conformance check, and cites the RFC. The RFC's "Landed in" field is then filled | The author or a maintainer |
 
 Numbers are four digits, given in order and never reused. Reserving a number means opening the draft pull request.
@@ -41,7 +41,7 @@ Numbers are four digits, given in order and never reused. Reserving a number mea
 | Rejected | Declined, with reasons |
 | Superseded | Replaced by a later accepted RFC, which it links |
 
-An accepted RFC is not edited to change its meaning. A substantive change is a new RFC that supersedes or amends it. Editorial corrections are made directly.
+An accepted RFC is not edited to change its meaning. A substantive change is a new RFC that supersedes or amends it. Editorial corrections are made directly. An RFC carries two dates, "Created" and "Decided", and no "Last updated" line: a draft's history is in git, and a decided RFC does not change.
 
 ## 4. What an RFC must contain
 

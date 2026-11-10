@@ -91,7 +91,7 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 | **PR-001** — Current | On request, a provider returns in one response the items the user has open in the app and the focus. | Provider | P0 | V-001 |
 | **PR-002** — Item shape | Every item has `id`, `type` and `title`. An item may have `content`, `url`, `parent`, `locatable` and `payload`. | Provider | P0 | — |
 | **PR-003** — Focus | The response names the focus as an ordered list of item ids. A selection is an item whose `parent` is the item it was made in. | Provider | P0 | — |
-| **PR-004** — Response time | A provider answers a request for current context within 50 ms. A host stops waiting at 150 ms and proceeds without context. | Both | P0 | V-002 |
+| **PR-004** — Response time | A provider answers a request for current context from state it already holds, without waiting on disk or network. A host sets its own time limit and proceeds without context when the limit passes. | Both | P0 | V-002 |
 
 **F-CX2 — Content** · P0. An item carries its content in a form any agent can read.
 
@@ -211,7 +211,7 @@ Each Verification checks one Requirement. The "Plan" column gives the "Done when
 | Verification | Description | Verifies | Plan |
 |---|---|---|---|
 | **V-001** — Current returns open items | With two documents open and a sentence selected, call `context_current`. The response lists both documents and the selection, and the focus names the selection. | PR-001 | 3 |
-| **V-002** — Current is fast | Call `context_current` 100 times against a provider with a 50,000-word document open. Every call returns in under 50 ms. | PR-004 | 3 |
+| **V-002** — Current is fast | Call `context_current` 100 times against a provider with a 50,000-word document open. No call exceeds the time limit of the host under test, and the response time does not grow with the size of the document. | PR-004 | 3 |
 | **V-003** — Id survives edits | Select a passage and record its id. Type a paragraph above it. `context_locate` with that id returns the same passage at its new position. | PR-009 | 5 |
 | **V-004** — Locate matches Accessibility | Select a passage. Compare the rectangles from `context_locate` with the bounds the platform accessibility API reports for the same range. They agree within 2 points. The Accessibility reading does not pass through the provider's protocol code. | PR-013 | 4 |
 | **V-005** — Descriptor exists | Launch the provider with its setting on. A descriptor with all six fields exists in the providers folder. | PR-017 | 1 |

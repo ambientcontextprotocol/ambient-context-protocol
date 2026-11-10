@@ -157,7 +157,7 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 | Requirement | Statement | On | Priority | Verified by |
 |---|---|---|---|---|
 | **PR-023** — MCP server | A provider is an MCP server reached by `POST /mcp` at the descriptor's `endpoint`. | Provider | P0 | — |
-| **PR-024** — Two resources | The provider offers `current` as the resource `ambient-context://current` and `locate` as the resource template `ambient-context://location/{id}`. Each is read with `resources/read` and returns one JSON document. The host's code reads them; the model does not call them. | Provider | P0 | — |
+| **PR-024** — Two resources | The provider offers `current` as the resource `ambient://current` and `locate` as the resource template `ambient://location/{id}`. Each is read with `resources/read` and returns one JSON document. The host's code reads them; the model does not call them. | Provider | P0 | — |
 | **PR-025** — Any MCP client | An MCP client with no knowledge of this protocol can list and read both resources, given only the endpoint and token. | Provider | P0 | V-009 |
 | **PR-026** — MCP versions | The provider speaks MCP `2026-07-28` and also answers the older `initialize` handshake. | Provider | P0 | — |
 
@@ -208,8 +208,8 @@ Each Verification checks one Requirement. The "Plan" column gives the "Done when
 
 | Verification | Description | Verifies | Plan |
 |---|---|---|---|
-| **V-001** — Current returns open items | With two documents open and a sentence selected, read `ambient-context://current`. The response lists both documents and the selection, and the focus names the selection. | PR-001 | 3 |
-| **V-002** — Current is fast | Read `ambient-context://current` 100 times against a provider with a 50,000-word document open. No call exceeds the time limit of the host under test, and the response time does not grow with the size of the document. | PR-004 | 3 |
+| **V-001** — Current returns open items | With two documents open and a sentence selected, read `ambient://current`. The response lists both documents and the selection, and the focus names the selection. | PR-001 | 3 |
+| **V-002** — Current is fast | Read `ambient://current` 100 times against a provider with a 50,000-word document open. No call exceeds the time limit of the host under test, and the response time does not grow with the size of the document. | PR-004 | 3 |
 | **V-003** — Id survives edits | Select a passage and record its id. Type a paragraph above it. Reading its location with that id returns the same passage at its new position. | PR-009 | 5 |
 | **V-004** — Locate matches Accessibility | Select a passage. Compare the rectangles from its location with the bounds the platform accessibility API reports for the same range. They agree within 2 points. The Accessibility reading does not pass through the provider's protocol code. | PR-013 | 4 |
 | **V-005** — Descriptor exists | Launch the provider with its setting on. A descriptor with all six fields exists in the providers folder. | PR-017 | 1 |

@@ -52,7 +52,7 @@ A provider answers two questions.
 
 The id is short and opaque. It keeps pointing at the same passage after the user types above it, so an agent can refer to `sel-23` minutes later and the host can still find it.
 
-It is an extension to the Model Context Protocol. A provider is a small MCP server on the local machine, and the two answers are MCP resources: `ambient-context://current` and `ambient-context://location/{id}`. The host reads them; the agent never calls the app. Any MCP client can list and read them, including one that has never heard of this protocol.
+It is an extension to the Model Context Protocol. A provider is a small MCP server on the local machine, and the two answers are MCP resources: `ambient://current` and `ambient://location/{id}`. The host reads them; the agent never calls the app. Any MCP client can list and read them, including one that has never heard of this protocol.
 
 A running provider announces itself with a descriptor file that only the user can read. The file gives the endpoint and a token minted at launch. A host finds the frontmost app's descriptor, connects, and asks.
 

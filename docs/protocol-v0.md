@@ -55,14 +55,14 @@ Content-Type: application/json
 Accept: application/json, text/event-stream
 MCP-Protocol-Version: 2026-07-28
 Mcp-Method: resources/read
-Mcp-Name: ambient-context://current
+Mcp-Name: ambient://current
 
 {
   "jsonrpc": "2.0",
   "id": 7,
   "method": "resources/read",
   "params": {
-    "uri": "ambient-context://current",
+    "uri": "ambient://current",
     "_meta": { "io.modelcontextprotocol/protocolVersion": "2026-07-28" }
   }
 }
@@ -78,7 +78,7 @@ Mcp-Name: ambient-context://current
     "resultType": "complete",
     "contents": [
       {
-        "uri": "ambient-context://current",
+        "uri": "ambient://current",
         "mimeType": "application/json",
         "text": "{ \"app\": …, \"focus\": …, \"items\": … }"
       }
@@ -125,7 +125,7 @@ Decoded, the text is:
 
 **Step 4.** The agent decides its answer belongs beside the sentence. It tells the host which item, by id: `sel-23`. How an agent says this is also the host's business. The agent never calls the provider.
 
-**Step 5.** The host asks the editor where that item is, by reading `ambient-context://location/sel-23` the same way as in step 1.
+**Step 5.** The host asks the editor where that item is, by reading `ambient://location/sel-23` the same way as in step 1.
 
 **Step 6.** The editor answers, and the host places its own interface. Decoded:
 
@@ -297,8 +297,8 @@ The settings object has one field, `version`, the version of this protocol the p
 
 | Operation | Resource | Listed by |
 |---|---|---|
-| `current` | `ambient-context://current` | `resources/list` |
-| `locate` | `ambient-context://location/{id}` | `resources/templates/list` |
+| `current` | `ambient://current` | `resources/list` |
+| `locate` | `ambient://location/{id}` | `resources/templates/list` |
 
 A host performs an operation with `resources/read` on the address. For `locate`, the host puts the item's id in place of `{id}`.
 
@@ -311,7 +311,7 @@ The result's `contents` array holds exactly one entry: the `uri` that was read, 
   "resultType": "complete",
   "resources": [
     {
-      "uri": "ambient-context://current",
+      "uri": "ambient://current",
       "name": "current",
       "title": "Current context",
       "description": "What the user has open and selected in this app, right now.",
@@ -328,7 +328,7 @@ The result's `contents` array holds exactly one entry: the `uri` that was read, 
   "resultType": "complete",
   "resourceTemplates": [
     {
-      "uriTemplate": "ambient-context://location/{id}",
+      "uriTemplate": "ambient://location/{id}",
       "name": "location",
       "title": "Location of an item",
       "description": "Where an item from the current context is on screen.",
@@ -394,8 +394,8 @@ A provider writes the file after its listener is up. At launch it removes any de
 
 1. When the user invokes it, take the front app's process id from the operating system.
 2. Look for a descriptor with that process id. Ignore a file whose process is no longer running, whose bundle identifier does not match the process, or whose `protocol` the host does not support.
-3. Read `ambient-context://current` with the token and a time limit of the host's choosing. On any failure, carry on with no context.
-4. To place something beside an item, read `ambient-context://location/<id>`.
+3. Read `ambient://current` with the token and a time limit of the host's choosing. On any failure, carry on with no context.
+4. To place something beside an item, read `ambient://location/<id>`.
 
 **Trust.** Any program running as the user can read the token. That is the same level of protection other local integrations of this kind use. A host can additionally check the provider's code signature from its process id without any change to the format.
 
@@ -457,7 +457,7 @@ An app already has the information for the third in its window and selection sta
 3. Whether `content` needs size limits, and what a provider does with a very large selection or image.
 4. Web apps: the page knows where an element is in the page, and only the browser knows where the page is on screen. Either the browser is the provider or something bridges the two.
 5. The token in a file is not MCP's own authorization scheme, which is built on OAuth. Whether a local provider should offer that as well.
-6. The final names: the extension identifier, the `ambient-context` address scheme, the descriptor folder and the protocol itself.
+6. The final names: the extension identifier, the `ambient` address scheme, the descriptor folder and the protocol itself.
 
 ## 14. MCP details this draft relies on
 

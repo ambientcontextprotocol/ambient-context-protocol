@@ -30,7 +30,6 @@ Last updated: `2026.11.09`
 2. *An envelope, not a domain model.* The protocol fixes the shape of an item and leaves its type and payload to the app. A text editor, a task tracker and a design tool all fit without the protocol knowing what a document, a task or a frame is.
 3. *Pulled on the user's action.* A host asks for context when the user does something that calls for it. A provider does not push, and a host does not poll. Provisional: this holds for version 0.1 and may change.
 4. *Any MCP client can use it.* The first binding is ordinary MCP tools. A client that has never heard of the protocol can still call them.
-5. *Costs an app a day, not a month.* A provider is a small local server, one file on disk and two tools. No SDK is required.
 
 ---
 

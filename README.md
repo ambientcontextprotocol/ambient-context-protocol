@@ -74,6 +74,6 @@ A running provider announces itself with a descriptor file that only the user ca
 
 ## In this repository
 
-- [`docs/prd.md`](docs/prd.md): the product requirements. Domains, Features, Requirements and how each is verified.
+- [`docs/pm.md`](docs/pm.md): the product model. Domains, Features, Requirements and how each is verified.
 - [`docs/protocol-v0.md`](docs/protocol-v0.md): the protocol, draft 0.1. Operations, items, locations, the MCP binding and discovery.
 - [`sdk/swift`](sdk/swift/README.md): a Swift package that makes a macOS app a provider. The app says what is open and selected; the package does the rest.

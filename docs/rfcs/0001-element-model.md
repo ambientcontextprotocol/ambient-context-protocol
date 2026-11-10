@@ -11,7 +11,7 @@
 | Discussion | Not yet opened as a pull request |
 | Specification sections | 2 (example), 4 (operations), 5 (items), 9 (rules), 10 (versioning) |
 | Version effect | Breaking: `0.1` to `0.2.0` |
-| Supersedes or amends | None |
+| Supersedes or amends | None. Amended by RFC-0003 (a hovered state) |
 | Released in | — |
 
 ## 1. Summary

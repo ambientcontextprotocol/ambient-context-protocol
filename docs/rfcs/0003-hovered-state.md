@@ -5,9 +5,9 @@
 | Field | Value |
 |---|---|
 | Author | The protocol session, for Andrew Jones |
-| Status | Draft |
+| Status | Accepted |
 | Created | `2026.11.10` |
-| Decided | — |
+| Decided | `2026.11.10` |
 | Discussion | Not yet opened as a pull request |
 | Specification sections | The element's fields and states (RFC-0001, 4.1); rules for hosts |
 | Version effect | Additive |
@@ -86,4 +86,6 @@ Additive. A provider that never sets it is correct. A host that does not know th
 
 ## 10. Decision and outcome
 
-Pending.
+Accepted on 2026.11.10 by Andrew Jones, maintainer, for protocol version `0.2.0`, as an amendment to RFC-0001.
+
+Why: pointing with the pointer is the cheapest way to indicate a thing, and speech without a selection has nothing else to resolve "this" to. It is optional and additive, and costs nothing in compatibility while no implementation of 0.2.0 exists. The open questions in section 9 stay open during implementation. Not yet implemented or released.

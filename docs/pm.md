@@ -1,4 +1,4 @@
-# Ambient Context Protocol :: Product Model
+# Ambient Context Protocol · Product Model
 
 Last updated: `2026.11.09`
 

@@ -87,6 +87,6 @@ Rules:
 
 ## 8. Adopting this process
 
-This document, the template, the index and CONTRIBUTING are proposed together on one branch. They take effect when a maintainer merges them. RFC-0001, the element model, is drafted alongside as the first use of the process and is not decided by that merge.
+This document, the template, the index and CONTRIBUTING took effect on `2026.11.10`, when the maintainer approved them. RFC-0001 and RFC-0002 were the first uses of the process and were accepted the same day.
 
 Adapted from the RFC procedure used in the maintainers' World Model repository, with pull-request review and versioning rules added for a public protocol.

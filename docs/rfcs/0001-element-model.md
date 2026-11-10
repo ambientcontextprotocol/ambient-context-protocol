@@ -157,11 +157,12 @@ Draft requirements, each to be added to the product model on acceptance:
 
 ## 9. Open questions
 
-1. May a provider put its own word in `role` when none fits, in place of `Group` plus a subrole?
-2. Should the role spelling follow Apple's capitalization, as here, or lower case?
-3. Is `visible` needed in the first version, or only `selected` and `focused`?
-4. Limits: the largest tree, depth and content size a provider may send.
-5. Does `locate` remain a separate resource or become a question asked of an element?
+1. Should the role spelling follow Apple's capitalization, as here, or lower case?
+2. Is `visible` needed in the first version, or only `selected` and `focused`?
+3. Limits: the largest tree, depth and content size a provider may send.
+4. Does `locate` remain a separate resource or become a question asked of an element?
+
+Settled in discussion on 2026.11.10: a provider's own word goes only in `subrole`, never in `role`. A role added later is not a breaking change, because a receiver treats an unknown role as `Group`.
 
 ## 10. Decision and outcome
 

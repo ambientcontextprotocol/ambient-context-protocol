@@ -4,7 +4,7 @@ Last updated: `2026.11.09`
 
 > A protocol by which a desktop app tells an ambient agent host what the user has open, what they have selected, and where an item is on screen. Version `0.1`. First provider: Paper. First host: Sirius. Task: SIR-0105.
 
-**Status.** Draft for Andrew's review. Nothing here is in the graph. The structure uses the product ontology as edited on 2026.11.09 (Product, Domain, Feature, Requirement, Verification). The requirements restate the design in the [plan](../../paper/.plan/ambient-context-provider.md) and the [protocol draft](../.plan/protocol-v0.md); most of their wording is Claude's and unconfirmed. All method, field and path names are placeholders.
+**Status.** Draft for Andrew's review. Nothing here is in the graph. The structure uses the product ontology as edited on 2026.11.09 (Product, Domain, Feature, Requirement, Verification). The requirements restate the design in the [plan](../../paper/.plan/ambient-context-provider.md) and the [protocol draft](protocol-v0.md); most of their wording is Claude's and unconfirmed. All method, field and path names are placeholders.
 
 ## Contents
 

@@ -12,7 +12,7 @@
 | Specification sections | 7.1 (the server), 8 (discovery, host step 3), 11 (implementing a provider) |
 | Version effect | Additive |
 | Supersedes or amends | None. Replaces an earlier idea of a provider with no token, which is withdrawn |
-| Landed in | — |
+| Released in | — |
 
 ## 1. Summary
 

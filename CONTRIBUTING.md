@@ -28,7 +28,7 @@ If you are unsure which applies, open an issue and ask.
 - One change per pull request, with a description of what changes and why.
 - A change to a package comes with a test. Run `swift test` in `sdk/swift` and `npm test` in `sdk/typescript` before opening it.
 - A change to one package that affects behavior on the wire is made in the other in the same pull request, or the pull request says why not. The two packages must behave identically.
-- A change to the specification's behavior cites the accepted RFC it lands, bumps the version as the process describes, and adds a changelog entry.
+- A change to the specification's behavior cites the accepted RFC it implements, bumps the version as the process describes, and adds a changelog entry.
 - Commit subjects follow `type(scope): what changed`, for example `fix(sdk): refuse a request with an Origin header`. Types: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`.
 - Markdown prose is not hard-wrapped: one paragraph is one line.
 

@@ -12,7 +12,7 @@
 | Specification sections | {Sections of docs/protocol-v0.md this changes} |
 | Version effect | {Breaking, additive or none; see the process, section 6} |
 | Supersedes or amends | {RFC numbers, or none} |
-| Landed in | {Filled when a released version contains it} |
+| Released in | {Filled when a released version contains it} |
 
 {Follow docs/rfcs/README.md. Text in curly braces is guidance: replace each one with your own text, braces included, and delete this note. Gaps are acceptable in a Draft; list them under open questions and do not invent settled answers.}
 
@@ -56,4 +56,4 @@
 
 Pending.
 
-{A maintainer records: the decision, who made it, on which revision, and why. For a trial: scope, owner, how it is judged, review date. Later: links to the pull requests that landed it and the version.}
+{A maintainer records: the decision, who made it, on which revision, and why. For a trial: scope, owner, how it is judged, review date. Later: links to the pull requests that implemented it and the version that released it.}

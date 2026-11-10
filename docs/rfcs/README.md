@@ -24,7 +24,7 @@ When in doubt, ask whether an implementation written before the change would sti
 | 2. Draft | Copy [the template](0000-template.md) to `docs/rfcs/NNNN-short-title.md`, taking the next unused number in [the index](index.md). Open a pull request that adds the file with status Draft and a row in the index | The author |
 | 3. Review | Discussion happens on the pull request. The author keeps the RFC current, so that the document, not the comment history, states the proposal | Anyone |
 | 4. Decide | A maintainer records the outcome in section 10 of the RFC, sets its status and fills "Decided" with the date. An accepted or provisional RFC is merged. A declined one is merged too, with its reason, so the number and the reasoning are kept | A maintainer |
-| 5. Land | A separate pull request changes the specification, the version, the changelog, the SDKs and the conformance check, and cites the RFC. The RFC's "Landed in" field is then filled | The author or a maintainer |
+| 5. Implement | A separate pull request changes the specification, the version, the changelog, the SDKs and the conformance check, and cites the RFC. When a released version contains the change, the RFC's status becomes Released and its "Released in" field names that version | The author or a maintainer |
 
 Numbers are four digits, given in order and never reused. Reserving a number means opening the draft pull request.
 
@@ -35,7 +35,7 @@ Numbers are four digits, given in order and never reused. Reserving a number mea
 | Draft | Under review. Nothing is adopted |
 | Provisional | Chosen for a bounded trial. The RFC records the scope, the owner, how the trial will be judged and when it is reviewed. Implementations mark the feature experimental |
 | Accepted | Adopted within the scope the RFC states. Not yet necessarily in the specification |
-| Landed | Accepted, and present in a released version of the specification, which the RFC names |
+| Released | Accepted, implemented, and present in a released version of the specification, which the RFC names |
 | Deferred | Paused, with the reason and the condition for returning to it |
 | Withdrawn | Withdrawn by its author |
 | Rejected | Declined, with reasons |
@@ -52,7 +52,7 @@ Beyond the template's sections, an RFC is complete enough to decide when it stat
 3. *Privacy and security:* what new information leaves an app, who can ask for it, and what a hostile local program could do with the change.
 4. *Conformance:* how an outside check can tell a correct implementation from an incorrect one. A requirement that cannot be checked is marked as such.
 5. *Requirements:* the entries in [the product model](../pm.md) it adds, changes or removes.
-6. *Implementation evidence,* before Accepted becomes Landed: at least one provider and one host that implement it and pass the conformance check.
+6. *Implementation evidence,* before Accepted becomes Released: at least one provider and one host that implement it and pass the conformance check.
 
 Gaps are acceptable in a Draft and are listed under open questions. An RFC does not invent settled answers.
 
@@ -76,8 +76,8 @@ The protocol version has three parts, `major.minor.patch`.
 
 Rules:
 
-1. One version of the specification may land several RFCs. The changelog entry for a version lists every RFC in it.
-2. The specification is the contract. An RFC explains why; once landed, the specification's text governs, and a conflict between them is a defect in the specification to be fixed by pull request.
+1. One version of the specification may contain several RFCs. The changelog entry for a version lists every RFC in it.
+2. The specification is the contract. An RFC explains why; once it is released, the specification's text governs, and a conflict between them is a defect in the specification to be fixed by pull request.
 3. A provisional feature is carried as experimental and does not change the version until it is accepted.
 4. The specification today writes versions with two parts (`0.1`). Moving to three is part of RFC-0001.
 

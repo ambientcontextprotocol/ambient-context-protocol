@@ -12,7 +12,7 @@
 | Specification sections | 2 (example), 4 (operations), 5 (items), 9 (rules), 10 (versioning) |
 | Version effect | Breaking: `0.1` to `0.2.0` |
 | Supersedes or amends | None |
-| Landed in | — |
+| Released in | — |
 
 ## 1. Summary
 

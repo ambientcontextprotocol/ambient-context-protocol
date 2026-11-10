@@ -97,6 +97,7 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 |---|---|---|---|---|
 | **PR-005** — Content blocks | `content` is a list of MCP content blocks, unchanged from the MCP specification. | Provider | P0 | — |
 | **PR-006** — Open types | `type` is an open string and `payload` is app-defined. The protocol defines no item types beyond the envelope. | Both | P0 | — |
+| **PR-046** — Limits | A provider stays within stated bounds on the size of an item's content, the number of items in one answer and the number of ids it keeps alive. The bounds are not set yet (protocol §13, question 3). | Provider | P1 | — |
 
 **F-CX3 — Changes since** · P2. A provider reports what changed since a given point.
 
@@ -111,8 +112,15 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 | Requirement | Statement | On | Priority | Verified by |
 |---|---|---|---|---|
 | **PR-008** — Opaque ids | An id is a short string minted by the provider, such as `sel-23`. A host does not parse it. | Both | P0 | — |
-| **PR-009** — Stable under edits | An id keeps referring to the same item after the surrounding content is edited. | Provider | P0 | V-003 |
+| **PR-009** — Stable under edits | An id keeps referring to the same item after the surrounding content is edited. | Provider | P0 | V-003, V-019 |
 | **PR-010** — No reuse | A provider does not reuse an id while it is running. When the item no longer exists, the provider says it is gone. | Provider | P0 | — |
+
+**F-ID2 — Provider instance** · P0. An id is tied to the provider that issued it and to one run of that provider.
+
+| Requirement | Statement | On | Priority | Verified by |
+|---|---|---|---|---|
+| **PR-040** — Instance value | A provider mints a random `instance` value each time it starts, returns it with current context and writes it in its descriptor. | Provider | P0 | V-013 |
+| **PR-041** — Provider kept with the id | A host records which provider and which `instance` issued every id it passes to an agent. It resolves an id only with that provider and only while the instance is unchanged, and otherwise treats the item as gone. It never looks an id up again by app name or process id. | Host | P0 | V-014 |
 
 ### 3.3 — Location
 
@@ -121,8 +129,8 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 | Requirement | Statement | On | Priority | Verified by |
 |---|---|---|---|---|
 | **PR-011** — Locate | Given an id, a provider returns a location: `state` (`visible`, `offscreen` or `gone`), `rects` and `window`. | Provider | P0 | — |
-| **PR-012** — Coordinates | Rectangles are in global screen coordinates, in points, with the origin at the top left of the primary display. | Provider | P0 | — |
-| **PR-013** — Accuracy | Rectangles agree, within 2 points, with what the platform accessibility API reports for the same item. | Provider | P0 | V-004 |
+| **PR-012** — Coordinates | Rectangles are in global screen coordinates, in points, with the origin at the top left of the primary display. | Provider | P0 | V-021 |
+| **PR-013** — Accuracy | Rectangles agree, within 2 points, with what the platform accessibility API reports for the same item. | Provider | P0 | V-004, V-020 |
 | **PR-014** — Placement hints | A location may carry `avoid` (a rectangle the host should not cover) and `edge` (the side the provider prefers). A host may ignore both. | Both | P0 | — |
 | **PR-015** — No host UI in the protocol | No message names a host interface element. A provider cannot ask a host to draw anything. | Both | P0 | — |
 
@@ -139,16 +147,18 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 | Requirement | Statement | On | Priority | Verified by |
 |---|---|---|---|---|
 | **PR-017** — Descriptor | While it is running and enabled, a provider keeps a descriptor file at `~/Library/Application Support/AmbientContext/providers/<bundle-id>.<pid>.json`. | Provider | P0 | V-005 |
-| **PR-018** — Descriptor fields | The descriptor holds `protocol`, `app`, `pid`, `endpoint`, `token` and `started`. | Provider | P0 | — |
+| **PR-018** — Descriptor fields | The descriptor holds `protocol`, `app`, `pid`, `instance`, `endpoint`, `token` and `started`. | Provider | P0 | — |
 | **PR-019** — Descriptor permissions | The providers folder is mode `0700` and each descriptor is mode `0600`. | Provider | P0 | V-006 |
-| **PR-020** — Descriptor removal | A provider removes its descriptor when it quits. A host ignores a descriptor whose `pid` is not running. | Both | P0 | V-007 |
+| **PR-020** — Descriptor removal | A provider removes its descriptor when it quits. A host ignores a descriptor whose `pid` is not running. | Both | P0 | V-007, V-016 |
 | **PR-021** — Off means absent | When the user has turned the provider off, it writes no descriptor and opens no listener. | Provider | P0 | V-008 |
+| **PR-042** — Atomic write | A provider writes its descriptor after its listener is up, to a temporary name in the same folder, then renames it into place. | Provider | P0 | — |
+| **PR-043** — Endpoint check | Before using a descriptor, a host checks that the endpoint's address is `127.0.0.1` and that the process listening on its port is the process the descriptor names. It does not follow redirects, and it ignores an answer whose `instance` differs from the descriptor's. | Host | P0 | V-015 |
 
-**F-DI2 — Dial-in** · P2. A provider that cannot listen connects out to the host.
+**F-DI2 — Discovery without a descriptor** · P2. A provider that cannot announce itself with a descriptor is still found.
 
 | Requirement | Statement | On | Priority | Verified by |
 |---|---|---|---|---|
-| **PR-022** — Dial-in | A provider that cannot listen, such as a sandboxed app or a web page, connects out to the host and serves the same operations over that connection. | Both | P2 | — |
+| **PR-022** — Discovery without a descriptor | A provider that cannot write to the shared folder (a sandboxed Mac app) or cannot listen (a web page) can still be found and read. The mechanism is not designed; connecting out to the host is one candidate. | Both | P2 | — |
 
 ### 3.5 — Binding
 
@@ -159,7 +169,8 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 | **PR-023** — MCP server | A provider is an MCP server reached by `POST /mcp` at the descriptor's `endpoint`. | Provider | P0 | — |
 | **PR-024** — Two resources | The provider offers `current` as the resource `ambient://current` and `locate` as the resource template `ambient://location/{id}`. Each is read with `resources/read` and returns one JSON document. The host's code reads them; the model does not call them. | Provider | P0 | — |
 | **PR-025** — Any MCP client | An MCP client with no knowledge of this protocol can list and read both resources, given only the endpoint and token. | Provider | P0 | V-009 |
-| **PR-026** — MCP versions | The provider speaks MCP `2026-07-28` and also answers the older `initialize` handshake. | Provider | P0 | — |
+| **PR-026** — MCP versions | The provider speaks MCP `2026-07-28`. It should also serve clients that use the older `initialize` handshake, following that revision's rules for requests, results and errors. | Provider | P0 | — |
+| **PR-044** — Request metadata | A host sends `protocolVersion` and `clientCapabilities` in `_meta` on every request, as MCP `2026-07-28` requires. A provider refuses a request missing either with HTTP `400` and error `-32602`. | Both | P0 | V-017 |
 
 ### 3.6 — Compatibility
 
@@ -174,13 +185,13 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 
 ### 3.7 — Security
 
-**F-SE1 — Access control** · P0. Only a local process that can read the user's descriptor can call a provider.
+**F-SE1 — Access control** · P0. Only a local process that can read the user's descriptor can call a provider. A hostile program already running as the user is outside what version 0.1 defends against: it can read the token, and the user's documents, without this protocol. The token shows that a caller can read the user's files, not that the user approved the caller.
 
 | Requirement | Statement | On | Priority | Verified by |
 |---|---|---|---|---|
 | **PR-031** — Loopback only | A provider listens on `127.0.0.1` only. | Provider | P0 | — |
 | **PR-032** — Token required | A provider refuses a request that lacks `Authorization: Bearer <token>` with the descriptor's token. | Provider | P0 | V-010 |
-| **PR-033** — No browser origin | A provider refuses any request that carries an `Origin` header. | Provider | P0 | V-011 |
+| **PR-033** — No browser origin | A provider refuses any request that carries an `Origin` header. A host does not send one. | Both | P0 | V-011 |
 | **PR-034** — Token lifetime | A provider mints a new token at each launch and stores it nowhere but the descriptor. | Provider | P0 | — |
 
 ### 3.8 — Host
@@ -191,6 +202,7 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 |---|---|---|---|---|
 | **PR-035** — User action | A host requests context only in response to an action by the user. | Host | P0 | — |
 | **PR-036** — Shown and removable | Before context is sent to an agent, the host shows the user what will be sent and lets them remove it. | Host | P0 | — |
+| **PR-045** — Removed means removed | If the user removes context, or sends the message, while a provider's answer is still on its way, the host discards the late answer. | Host | P0 | V-018 |
 
 **F-HO2 — Scope** · P0. A host limits how much context it takes and from which apps.
 
@@ -204,40 +216,51 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 
 ## 4. Verifications
 
-Each Verification checks one Requirement. The "Plan" column gives the "Done when" line in the [plan](../../paper/.plan/ambient-context-provider.md) §1 that it came from. Lines there that covered several Requirements are split.
+Each Verification checks one Requirement; a Requirement may have several. The "Plan" column gives the "Done when" line in the [plan](../../paper/.plan/ambient-context-provider.md) §1 that it came from. Lines there that covered several Requirements are split. A dash marks a Verification added after the adversarial review of 2026.11.09, with no line in the plan yet.
 
 | Verification | Description | Verifies | Plan |
 |---|---|---|---|
 | **V-001** — Current returns open items | With two documents open and a sentence selected, read `ambient://current`. The response lists both documents and the selection, and the focus names the selection. | PR-001 | 3 |
-| **V-002** — Current is fast | Read `ambient://current` 100 times against a provider with a 50,000-word document open. No call exceeds the time limit of the host under test, and the response time does not grow with the size of the document. | PR-004 | 3 |
+| **V-002** — Current is fast | Read `ambient://current` 100 times with a 1,000-word document open, then with 50,000 words, then with 500,000. No call exceeds the time limit of the host under test, and the median time at the largest size is within a small factor of the median at the smallest. | PR-004 | 3 |
 | **V-003** — Id survives edits | Select a passage and record its id. Type a paragraph above it. Reading its location with that id returns the same passage at its new position. | PR-009 | 5 |
 | **V-004** — Locate matches Accessibility | Select a passage. Compare the rectangles from its location with the bounds the platform accessibility API reports for the same range. They agree within 2 points. The Accessibility reading does not pass through the provider's protocol code. | PR-013 | 4 |
-| **V-005** — Descriptor exists | Launch the provider with its setting on. A descriptor with all six fields exists in the providers folder. | PR-017 | 1 |
+| **V-005** — Descriptor exists | Launch the provider with its setting on. A descriptor with all seven fields exists in the providers folder. | PR-017 | 1 |
 | **V-006** — Descriptor is private | Read the modes of the providers folder and the descriptor. They are `0700` and `0600`. | PR-019 | 1 |
-| **V-007** — Descriptor is removed | Quit the provider. Its descriptor is gone. | PR-020 | 1 |
+| **V-007** — Descriptor is removed on quit | Quit the provider. Its descriptor is gone. | PR-020 | 1 |
 | **V-008** — Off means absent | Launch the provider with its setting off. No descriptor exists and no port is open. | PR-021 | 9 |
 | **V-009** — A foreign MCP client works | With a stock MCP client that is not the host, given only `endpoint` and `token`, list the resources and the template and read both. Both return results. | PR-025 | 6 |
 | **V-010** — Token is required | Send a request with no `Authorization` header, then one with a wrong token. Both are refused. | PR-032 | 2 |
 | **V-011** — Origin is refused | Send a request with a valid token and an `Origin` header. It is refused. | PR-033 | 2 |
 | **V-012** — No provider, no change | Put an app that is not a provider in front and use the host. Its behavior and the agent's message match those of a host with the protocol disabled. | PR-039 | 9 |
+| **V-013** — Instance changes per launch | Read `ambient://current` and the descriptor: both carry the same `instance`. Quit and relaunch the provider. Both now carry a different value. | PR-040 | — |
+| **V-014** — An old id is gone after restart | Give the host an id from a provider. Restart the provider and make it issue the same id for a different item. Ask the host to locate the id. It reports the item as gone and does not return the new item's position. Repeat with two providers that issue the same id: the host asks only the one that issued it. | PR-041 | — |
+| **V-015** — A false endpoint is ignored | Write a descriptor that names a running app's process but points at a server run by another process. Then one whose endpoint is not `127.0.0.1`, and one whose server answers with a redirect. The host uses none of them. | PR-043 | — |
+| **V-016** — A stale descriptor is ignored | Kill the provider so that its descriptor stays behind. The host ignores the file. Start another process that receives the same process id where the test can arrange it; the host still ignores the file, because the bundle identifier does not match. | PR-020 | — |
+| **V-017** — Request metadata is required | Send a request without `clientCapabilities` in `_meta`, then one without `protocolVersion`. Both are refused with HTTP `400` and error `-32602`. | PR-044 | — |
+| **V-018** — A late answer is discarded | With a provider that delays its answer, request context, then remove it before the answer arrives; in a second run, send the message instead. In neither run does the late context reach the agent or reappear in the host. | PR-045 | — |
+| **V-019** — Id survives harder edits | Record a selection's id. Replace text above it, undo and redo, type through an input method that composes characters, and insert characters outside the Basic Multilingual Plane above it. After each, its location returns the same passage. | PR-009 | — |
+| **V-020** — Locate on hard layouts | Repeat V-004 for a selection partly scrolled out of view, a selection that spans hidden Markdown syntax, and one that wraps across lines. Rectangles cover only what is visible and agree within 2 points. | PR-013 | — |
+| **V-021** — Coordinates across displays | Locate a selection in a window on a display left of or above the primary display, where coordinates are negative, and on a display with a different scale factor. Rectangles match the item's position in global points. | PR-012 | — |
 
 ---
 
 ## 5. Coverage
 
-Twelve of the 35 Requirements at P0 have a Verification. The 23 without one:
+Eighteen of the 41 Requirements at P0 have a Verification. The 23 without one:
 
 | Domain | Unverified at P0 |
 |---|---|
 | Context | PR-002, PR-003, PR-005, PR-006 |
 | Identity | PR-008, PR-010 |
-| Location | PR-011, PR-012, PR-014, PR-015 |
-| Discovery | PR-018 |
+| Location | PR-011, PR-014, PR-015 |
+| Discovery | PR-018, PR-042 |
 | Binding | PR-023, PR-024, PR-026 |
 | Compatibility | PR-027, PR-028, PR-029, PR-030 |
 | Security | PR-031, PR-034 |
 | Host | PR-035, PR-036, PR-037 |
 
 Most of the provider-side gaps close with one schema check: validate a `current` and a `locate` response against a published JSON Schema (PR-002, PR-003, PR-005, PR-011, PR-018, PR-024, PR-027). That check is the start of a conformance suite another app's author could run, which matters if this is to become a standard.
+
+The review of 2026.11.09 recommended building that suite's other half first: a fake provider that a host is tested against, covering both MCP revisions, stale and colliding ids (V-014), false and stale descriptors (V-015, V-016) and delayed answers (V-018). It needs no editor integration, so it can run before the first real provider exists.
 
 The three Host gaps (PR-035 to PR-037) are the hardest to verify from outside. A protocol cannot enforce what a host does with context it has received; these are rules of conduct a host claims to follow. I recommend keeping them as Requirements and marking their Verifications as inspections of the host, not automated checks.

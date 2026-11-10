@@ -63,7 +63,10 @@ Mcp-Name: ambient://current
   "method": "resources/read",
   "params": {
     "uri": "ambient://current",
-    "_meta": { "io.modelcontextprotocol/protocolVersion": "2026-07-28" }
+    "_meta": {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientCapabilities": {}
+    }
   }
 }
 ```
@@ -80,7 +83,7 @@ Mcp-Name: ambient://current
       {
         "uri": "ambient://current",
         "mimeType": "application/json",
-        "text": "{ \"app\": …, \"focus\": …, \"items\": … }"
+        "text": "{ \"app\": …, \"instance\": …, \"focus\": …, \"items\": … }"
       }
     ]
   }
@@ -92,6 +95,7 @@ Decoded, the text is:
 ```json
 {
   "app": { "id": "org.example.editor", "name": "Editor" },
+  "instance": "k3f9x2",
   "focus": ["sel-23"],
   "items": [
     {
@@ -123,7 +127,7 @@ Decoded, the text is:
 
 **Step 3.** The host shows the user what it picked up, so they can remove it, and passes it to the agent with the question. How a host words this for its agent is the host's business.
 
-**Step 4.** The agent decides its answer belongs beside the sentence. It tells the host which item, by id: `sel-23`. How an agent says this is also the host's business. The agent never calls the provider.
+**Step 4.** The agent decides its answer belongs beside the sentence. It tells the host which item, by id: `sel-23`. How an agent says this is also the host's business. The agent never calls the provider. The host remembers which provider, and which run of it, issued `sel-23`.
 
 **Step 5.** The host asks the editor where that item is, by reading `ambient://location/sel-23` the same way as in step 1.
 
@@ -172,6 +176,7 @@ Result:
 | Field | Type | Required | Meaning |
 |---|---|---|---|
 | `app` | object | yes | `id` (the app's bundle identifier) and `name`. |
+| `instance` | string | yes | A random value the provider mints each time it starts. It identifies this run of the provider. See [ids and instances](#5-items). |
 | `items` | array | yes | The [items](#5-items) currently open or selected. May be empty. |
 | `focus` | array of strings | no | The ids of the most specific items the user is pointing at: the selection if there is one, otherwise the front document or view. More than one when several things are selected together. Absent or empty when nothing has focus. |
 
@@ -185,7 +190,7 @@ Input:
 |---|---|---|---|
 | `id` | string | yes | An item id the provider returned earlier. |
 
-The result is a [location](#6-locations). An id the provider issued and whose item no longer exists is not an error: the provider answers with `state: "gone"`. An id the provider never issued is an error.
+The result is a [location](#6-locations). An id the provider issued and whose item no longer exists is not an error: the provider answers with `state: "gone"`. An id the provider never issued in this run is an error.
 
 ## 5. Items
 
@@ -193,7 +198,7 @@ An item is one thing the user has open or selected.
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `id` | string | yes | Short, opaque, unique within the provider, made of letters, digits, hyphens and underscores. See the lifetime rule in 9.1. |
+| `id` | string | yes | Short, opaque, made of letters, digits, hyphens and underscores. Unique within one run of one provider, and no further. See below and the lifetime rule in 9.1. |
 | `type` | string | yes | A name the provider chooses, such as `document`, `selection`, `task`, `layer`. Hosts use it for grouping and display only. |
 | `title` | string | yes | One line a person could read, such as a file name or a task's name. |
 | `content` | array of content blocks | no | What the item contains, for the agent to read or see. See below. |
@@ -201,6 +206,8 @@ An item is one thing the user has open or selected.
 | `parent` | string | no | The id of the item this one sits inside, such as a selection's document. |
 | `locatable` | boolean | no | Whether `locate` can answer for this item. Defaults to `false`. |
 | `payload` | object | no | Anything else the provider wants an agent to have. Free-form. |
+
+**Ids and instances.** An id means something only together with the provider that issued it and that provider's `instance`. Two providers may both issue `sel-23`, and a provider that restarts may issue it again for something else. The full name of an item is therefore the provider, its instance and the id. Keeping the three together is the host's job ([9.2](#92--for-hosts)); an agent sees only the id.
 
 A provider decides how much to list. An editor with forty open files might list them all, since each costs one line. A task manager would list the open view and the selected tasks, not its whole database.
 
@@ -268,7 +275,7 @@ A provider is an MCP server. The two operations are MCP resources. Everything in
 - **Address.** The provider listens on `127.0.0.1` only, on a port the system assigns at launch.
 - **Transport.** MCP's Streamable HTTP transport: each JSON-RPC request is one HTTP `POST` to a single path. The provider may answer every request with a single JSON object (`Content-Type: application/json`); it does not need to stream.
 - **Authentication.** Every request must carry `Authorization: Bearer <token>`. The token is random, made at launch, and published only in the descriptor file.
-- **Browser protection.** The provider refuses any request that carries an `Origin` header. Only browsers send one, and no web page should be calling this server.
+- **Browser protection.** The provider refuses any request that carries an `Origin` header. Browsers attach one to requests made by web pages, and no web page should be calling this server. This is stricter than MCP requires, and a host must not send the header.
 - **Required MCP methods.** `server/discover`, `resources/list`, `resources/templates/list` and `resources/read`. Nothing else is required.
 
 ### 7.2 — Declaring the extension
@@ -348,6 +355,7 @@ A provider that cannot report positions leaves the template out. Its context sti
 | An `Origin` header is present | HTTP `403` |
 | `locate` for an id whose item is gone | A normal result with `state: "gone"` |
 | `locate` for an id the provider never issued | JSON-RPC error `-32602`, as MCP requires for a resource that does not exist |
+| A request without the `_meta` fields MCP requires (`protocolVersion`, `clientCapabilities`) | HTTP `400` with JSON-RPC error `-32602` |
 | A method the provider does not implement | HTTP `404` with JSON-RPC error `-32601` |
 | A protocol version the provider does not support | HTTP `400` with MCP's `UnsupportedProtocolVersionError` (`-32022`) |
 
@@ -357,7 +365,7 @@ An agent connected straight to a provider, with no host between them, cannot rea
 
 ### 7.6 — Older MCP clients
 
-MCP revisions up to `2025-11-25` open with an `initialize` handshake, which `2026-07-28` removed. A provider should also answer that handshake, so that clients which have not moved yet can connect. MCP allows a server to support both.
+MCP revisions up to `2025-11-25` open with an `initialize` handshake, which `2026-07-28` removed. A provider should also answer that handshake, so that clients which have not moved yet can connect. MCP allows a server to support both. Doing so is more than one extra method: requests, results and errors differ between the two revisions, and a provider that supports both follows each revision's rules for the clients that use it.
 
 ## 8. Discovery
 
@@ -373,6 +381,7 @@ A running provider writes one descriptor file and removes it at quit.
   "protocol": "0.1",
   "app": { "id": "org.example.editor", "name": "Editor", "version": "2.3.0" },
   "pid": 48211,
+  "instance": "k3f9x2",
   "endpoint": "http://127.0.0.1:53124/mcp",
   "token": "q7Jm…",
   "started": "2026-11-09T21:14:03Z"
@@ -384,22 +393,24 @@ A running provider writes one descriptor file and removes it at quit.
 | `protocol` | The version of this protocol the provider speaks. The same value it declares in 7.2. |
 | `app` | The app's bundle identifier, name and version. |
 | `pid` | The provider's process id. |
+| `instance` | The value the provider minted at this launch. The same value `current` returns. |
 | `endpoint` | The MCP endpoint. |
 | `token` | The bearer token for this run. |
 | `started` | When the provider started, in UTC. |
 
-A provider writes the file after its listener is up. At launch it removes any descriptor left by an earlier run of itself that did not exit cleanly. When the user has turned the provider off, it writes no file and opens no listener.
+A provider writes the file after its listener is up, and writes it atomically: to a temporary name in the same folder, then renamed into place, so a host never reads half a file. At launch it removes any descriptor left by an earlier run of itself that did not exit cleanly. When the user has turned the provider off, it writes no file and opens no listener.
 
 **What the host does:**
 
 1. When the user invokes it, take the front app's process id from the operating system.
 2. Look for a descriptor with that process id. Ignore a file whose process is no longer running, whose bundle identifier does not match the process, or whose `protocol` the host does not support.
-3. Read `ambient://current` with the token and a time limit of the host's choosing. On any failure, carry on with no context.
-4. To place something beside an item, read `ambient://location/<id>`.
+3. Check the endpoint before using it. Its address must be `127.0.0.1`, and the process listening on its port must be the process the descriptor names. Ignore the descriptor otherwise.
+4. Read `ambient://current` with the token and a time limit of the host's choosing, without following redirects. Ignore the answer if its `instance` differs from the descriptor's. On any failure, carry on with no context.
+5. To place something beside an item, read `ambient://location/<id>` from the same provider and instance that issued the id.
 
-**Trust.** Any program running as the user can read the token. That is the same level of protection other local integrations of this kind use. A host can additionally check the provider's code signature from its process id without any change to the format.
+**What this defends against, and what it does not.** The folder and file permissions keep other users of the machine out. The token keeps out a program that can reach the port but cannot read the file. The check in step 3 keeps a descriptor from pointing a host at a server run by some other process. None of this defends against a hostile program already running as the user: it can read the token, and it can read the user's documents without this protocol. Version 0.1 states that limit and does not try to remove it. The token is also not consent: it shows that a caller can read the user's files, not that the user approved that caller. A host can additionally check the provider's code signature from its process id without any change to the format.
 
-**Apps that cannot do this.** A sandboxed app cannot write to a shared folder, and a web page cannot listen at all. Both can make an outgoing connection on the local machine. A later version will define a second mode in which the provider connects to the host and the same resources are read over that connection.
+**Apps that cannot do this.** A sandboxed Mac app can listen for connections when it has the network server entitlement, but it cannot write to a folder shared with other developers' apps, so it cannot publish a descriptor this way. A web page cannot listen at all. For these the open problem is discovery. One answer is a second mode in which the provider connects out to the host and the same resources are read over that connection; others may be simpler for sandboxed apps. None is designed yet.
 
 ## 9. Rules
 
@@ -416,6 +427,8 @@ A provider writes the file after its listener is up. At launch it removes any de
 - **Ask the front app only.** Which app is in front is the host's knowledge, from the operating system; `focus` in a provider's answer says what has focus inside that app. A host passes the front app's context in full. A user asking about a paragraph in an editor does not expect their mail to go along.
 - **Show what was collected.** Before a message is sent, the user must be able to see which context will go with it, and remove it.
 - **Pass ids through unchanged.** When an agent names an item, use exactly the id the provider issued.
+- **Keep the provider with the id.** Record which provider and which `instance` issued every id passed to an agent. When the agent names an id later, ask that provider only, and only if its instance is unchanged. If the provider has quit or restarted, treat the item as gone. Never look an id up again by app name or process id.
+- **Removed means removed.** If the user removes context, or sends the message, while a provider's answer is still on its way, the late answer is discarded.
 - **Never wait on a provider.** Set a time limit. If a provider does not answer, or answers `offscreen` or `gone`, carry on without the context or the placement.
 
 ## 10. Versioning
@@ -447,17 +460,19 @@ An app already has the information for the third in its window and selection sta
 - **Watching.** A provider telling the host when context or a location changes. MCP resources already support subscriptions, so this needs no new mechanism, only a decision to allow it.
 - **Other visible apps.** One line of context for each visible app that is not in front.
 - **Actions.** A provider declaring operations an agent can run on an item.
-- **Dial-in.** The second discovery mode in section 8.
+- **Discovery for sandboxed and web apps.** See the end of section 8.
 - **Other platforms.** Coordinates and the descriptor folder are defined for macOS only.
 
 ## 13. Open questions
 
 1. Whether an agent can ask to locate something the provider did not list, such as lines 40 to 42 of an open file. This would need a way to mint an id for an address.
 2. How long ids must stay valid after the app quits and reopens, if at all.
-3. Whether `content` needs size limits, and what a provider does with a very large selection or image.
+3. Limits. "Keep content small" is not something two implementations can agree on. The protocol needs stated bounds on the size of an item's content, the number of items in one answer, and how many ids a provider must keep alive.
 4. Web apps: the page knows where an element is in the page, and only the browser knows where the page is on screen. Either the browser is the provider or something bridges the two.
-5. The token in a file is not MCP's own authorization scheme, which is built on OAuth. Whether a local provider should offer that as well.
+5. The token in a file is not MCP's own authorization scheme, which is built on OAuth. MCP makes authorization optional and allows other strategies, so this is permitted, but it is not conformance with that scheme. Whether a local provider should offer it as well.
 6. The final names: the extension identifier, the `ambient` address scheme, the descriptor folder and the protocol itself.
+7. Which discovery mechanism a sandboxed Mac app can use, and whether dial-in is needed for it or only for web pages.
+8. Windows and Linux: the descriptor folder, the process checks in section 8 and the coordinate space are all defined for macOS only. Version 0.1 is a macOS profile, not yet a cross-platform protocol.
 
 ## 14. MCP details this draft relies on
 
@@ -472,6 +487,8 @@ Read from the MCP specification's source pages for revision `2026-07-28` (reposi
 | Custom address schemes | Allowed, and must follow RFC 3986 | `server/resources.mdx` |
 | Resource capability | A server offering resources declares `"resources": {}`; `subscribe` and `listChanged` are optional | `server/resources.mdx` |
 | No handshake | Every request carries its protocol version in `_meta` under `io.modelcontextprotocol/protocolVersion`; a server must implement `server/discover` | `basic/versioning.mdx`, `server/discover.mdx` |
+| Required request metadata | `protocolVersion` and `clientCapabilities` are required in `_meta` on every request; a request missing either is refused with `400` and `-32602` | `basic/index.mdx` |
+| Authorization | Optional for MCP implementations | `basic/authorization/index.mdx` |
 | Extensions | Advertised under `capabilities.extensions`, a map from identifier to settings object; identifiers take a vendor prefix in reverse DNS form; prefixes whose second label is `modelcontextprotocol` or `mcp` are reserved | `basic/versioning.mdx`, `basic/index.mdx` |
 | HTTP transport | One endpoint accepting `POST`; a request is answered with one JSON object or an event stream; the client's `Accept` lists both | `basic/transports/streamable-http.mdx` |
 | Required headers | `MCP-Protocol-Version` and `Mcp-Method` on every request; `Mcp-Name` carrying the address on `resources/read`; a mismatch with the body is refused with `400` and error `-32020` | `basic/transports/streamable-http.mdx` |
@@ -482,4 +499,4 @@ Read from the MCP specification's source pages for revision `2026-07-28` (reposi
 
 ## Changelog
 
-- `0.1` · `2026.11.09` · First version. Two operations, `current` and `locate`; items with MCP content blocks; locations. Carried as an MCP extension: two resources on a loopback MCP server, found through a descriptor file.
+- `0.1` · `2026.11.09` · First version. Two operations, `current` and `locate`; items with MCP content blocks; locations. Carried as an MCP extension: two resources on a loopback MCP server, found through a descriptor file. Revised the same day after an adversarial review: provider instances, endpoint checks, the limits of the descriptor's protection, and corrected request metadata.

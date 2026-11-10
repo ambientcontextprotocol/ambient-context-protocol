@@ -16,7 +16,7 @@
 
 ## 1. Summary
 
-Everything a provider reports becomes an element. Elements form one tree rooted at the application. Each element has a `role` taken from a general language (the role names of Apple's Accessibility that describe content and structure, plus `Document`), an optional `subrole` that is the app's own word for the thing, and three states, `selected`, `focused` and `visible`, stated on the element itself. The version number gains a third part.
+Everything a provider reports becomes an element. Elements form one tree rooted at the application. Each element has a `role` taken from a general language (thirteen words, eleven of them role names from Apple's Accessibility, plus `Text` and `Document`), an optional `subrole` that is the app's own word for the thing, and three states, `selected`, `focused` and `visible`, stated on the element itself. The version number gains a third part.
 
 ## 2. Motivation
 
@@ -40,7 +40,7 @@ A provider answers with one tree. A notes-and-threads app with words selected in
       { "id": "w-1", "role": "Window", "subrole": "pane", "focused": true, "children": [
         { "id": "th-2", "role": "List", "subrole": "thread", "title": "Launch plan", "children": [
           { "id": "c-3", "role": "Row", "subrole": "comment", "title": "Comment by Ada", "focused": true, "children": [
-            { "id": "sel-4", "role": "StaticText", "selected": true,
+            { "id": "sel-4", "role": "Text", "selected": true,
               "content": [{ "type": "text", "text": "what it shows" }] }
           ] }
         ] }
@@ -75,7 +75,7 @@ Out of scope: notifications when context changes, actions on an element, search 
 | `children` | no | The elements inside this one, in the app's order |
 | `attributes` | no | Anything else, by name. `author` and `related` are reserved (4.3). Replaces `payload` |
 
-`type`, `parent`, `locatable` and the answer's `focus` and `items` are removed. Selected text is an element with a text role and `selected` true, placed inside the element it was selected in.
+`type`, `parent`, `locatable` and the answer's `focus` and `items` are removed. Selected text is a `Text` element with `selected` true, placed inside the element it was selected in.
 
 ### 4.2 The role language
 
@@ -83,12 +83,23 @@ A role is one of the following, spelled as shown.
 
 | Kind | Roles |
 |---|---|
-| The app and its windows | Application, Window, Sheet, Drawer, Popover, TabGroup |
-| Containers | Group, SplitGroup, ScrollArea, LayoutArea, List, Table, Outline, Browser, Grid |
-| Entries | Row, Column, Cell, LayoutItem |
-| Text | StaticText, TextField, TextArea, Heading, Link |
-| Pictures and pages | Image, Page, WebArea |
+| The app and its windows | Application, Window |
+| Containers | Group, List, Table |
+| Entries | Row, Cell |
+| Text | Text, Heading, Link |
+| Pictures and pages | Image, Page |
 | Added by this protocol | Document |
+
+Thirteen roles. Two roles are kept apart only where an agent or a host would act differently on seeing one or the other. Apple's other content roles are reported as the nearest of these:
+
+| Role | Also covers, from Apple's list |
+|---|---|
+| Window | Sheet, Drawer, Popover, TabGroup. A tab or pane says so in the subrole |
+| Document | WebArea |
+| Group | SplitGroup, ScrollArea, LayoutArea, LayoutItem |
+| List | Outline, Browser. Nesting shows the hierarchy |
+| Table | Grid. A table is rows of cells; Column is not used |
+| Text | StaticText, TextField, TextArea |
 
 Rules: the root is an `Application`. A receiver treats a role it does not know as `Group`. A provider does not report controls, menus, indicators or window furniture.
 
@@ -149,9 +160,8 @@ Draft requirements, each to be added to the product model on acceptance:
 1. May a provider put its own word in `role` when none fits, in place of `Group` plus a subrole?
 2. Should the role spelling follow Apple's capitalization, as here, or lower case?
 3. Is `visible` needed in the first version, or only `selected` and `focused`?
-4. Should text roles collapse to one for providers, keeping three only for what a host reads from the operating system?
-5. Limits: the largest tree, depth and content size a provider may send.
-6. Does `locate` remain a separate resource or become a question asked of an element?
+4. Limits: the largest tree, depth and content size a provider may send.
+5. Does `locate` remain a separate resource or become a question asked of an element?
 
 ## 10. Decision and outcome
 

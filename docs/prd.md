@@ -29,7 +29,7 @@ Last updated: `2026.11.09`
 1. *The app says where; the host decides what.* A provider reports items and their positions. It never names what the host draws there.
 2. *An envelope, not a domain model.* The protocol fixes the shape of an item and leaves its type and payload to the app. A text editor, a task tracker and a design tool all fit without the protocol knowing what a document, a task or a frame is.
 3. *Pulled on the user's action.* A host asks for context when the user does something that calls for it. A provider does not push, and a host does not poll. Provisional: this holds for version 0.1 and may change.
-4. *Any MCP client can use it.* The first binding is ordinary MCP tools. A client that has never heard of the protocol can still call them.
+4. *It is ordinary MCP.* A provider is an MCP server and the two answers are MCP resources. A client that has never heard of the protocol can still list and read them.
 
 ---
 
@@ -123,7 +123,7 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 | **PR-011** — Locate | Given an id, a provider returns a location: `state` (`visible`, `offscreen` or `gone`), `rects` and `window`. | Provider | P0 | — |
 | **PR-012** — Coordinates | Rectangles are in global screen coordinates, in points, with the origin at the top left of the primary display. | Provider | P0 | — |
 | **PR-013** — Accuracy | Rectangles agree, within 2 points, with what the platform accessibility API reports for the same item. | Provider | P0 | V-004 |
-| **PR-014** — Placement hints | A location may carry `avoid` (rectangles the host should not cover) and `edge` (the side the provider prefers). A host may ignore both. | Both | P0 | — |
+| **PR-014** — Placement hints | A location may carry `avoid` (a rectangle the host should not cover) and `edge` (the side the provider prefers). A host may ignore both. | Both | P0 | — |
 | **PR-015** — No host UI in the protocol | No message names a host interface element. A provider cannot ask a host to draw anything. | Both | P0 | — |
 
 **F-LO2 — Watch** · P3. A provider tells the host when an item moves.
@@ -152,13 +152,13 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 
 ### 3.5 — Binding
 
-**F-BI1 — MCP binding** · P0. The protocol's operations are MCP tools on a local MCP server.
+**F-BI1 — MCP binding** · P0. The protocol's operations are MCP resources on a local MCP server.
 
 | Requirement | Statement | On | Priority | Verified by |
 |---|---|---|---|---|
 | **PR-023** — MCP server | A provider is an MCP server reached by `POST /mcp` at the descriptor's `endpoint`. | Provider | P0 | — |
-| **PR-024** — Two tools | The provider offers the tools `context_current` and `context_locate {id}`. Each returns structured content and the same data as a JSON text block. | Provider | P0 | — |
-| **PR-025** — Any MCP client | An MCP client with no knowledge of this protocol can list and call both tools, given only the endpoint and token. | Provider | P0 | V-009 |
+| **PR-024** — Two resources | The provider offers `current` as the resource `ambient-context://current` and `locate` as the resource template `ambient-context://location/{id}`. Each is read with `resources/read` and returns one JSON document. The host's code reads them; the model does not call them. | Provider | P0 | — |
+| **PR-025** — Any MCP client | An MCP client with no knowledge of this protocol can list and read both resources, given only the endpoint and token. | Provider | P0 | V-009 |
 | **PR-026** — MCP versions | The provider speaks MCP `2026-07-28` and also answers the older `initialize` handshake. | Provider | P0 | — |
 
 ### 3.6 — Compatibility
@@ -208,15 +208,15 @@ Each Verification checks one Requirement. The "Plan" column gives the "Done when
 
 | Verification | Description | Verifies | Plan |
 |---|---|---|---|
-| **V-001** — Current returns open items | With two documents open and a sentence selected, call `context_current`. The response lists both documents and the selection, and the focus names the selection. | PR-001 | 3 |
-| **V-002** — Current is fast | Call `context_current` 100 times against a provider with a 50,000-word document open. No call exceeds the time limit of the host under test, and the response time does not grow with the size of the document. | PR-004 | 3 |
-| **V-003** — Id survives edits | Select a passage and record its id. Type a paragraph above it. `context_locate` with that id returns the same passage at its new position. | PR-009 | 5 |
-| **V-004** — Locate matches Accessibility | Select a passage. Compare the rectangles from `context_locate` with the bounds the platform accessibility API reports for the same range. They agree within 2 points. The Accessibility reading does not pass through the provider's protocol code. | PR-013 | 4 |
+| **V-001** — Current returns open items | With two documents open and a sentence selected, read `ambient-context://current`. The response lists both documents and the selection, and the focus names the selection. | PR-001 | 3 |
+| **V-002** — Current is fast | Read `ambient-context://current` 100 times against a provider with a 50,000-word document open. No call exceeds the time limit of the host under test, and the response time does not grow with the size of the document. | PR-004 | 3 |
+| **V-003** — Id survives edits | Select a passage and record its id. Type a paragraph above it. Reading its location with that id returns the same passage at its new position. | PR-009 | 5 |
+| **V-004** — Locate matches Accessibility | Select a passage. Compare the rectangles from its location with the bounds the platform accessibility API reports for the same range. They agree within 2 points. The Accessibility reading does not pass through the provider's protocol code. | PR-013 | 4 |
 | **V-005** — Descriptor exists | Launch the provider with its setting on. A descriptor with all six fields exists in the providers folder. | PR-017 | 1 |
 | **V-006** — Descriptor is private | Read the modes of the providers folder and the descriptor. They are `0700` and `0600`. | PR-019 | 1 |
 | **V-007** — Descriptor is removed | Quit the provider. Its descriptor is gone. | PR-020 | 1 |
 | **V-008** — Off means absent | Launch the provider with its setting off. No descriptor exists and no port is open. | PR-021 | 9 |
-| **V-009** — A foreign MCP client works | With a stock MCP client that is not the host, given only `endpoint` and `token`, list the tools and call both. Both return results. | PR-025 | 6 |
+| **V-009** — A foreign MCP client works | With a stock MCP client that is not the host, given only `endpoint` and `token`, list the resources and the template and read both. Both return results. | PR-025 | 6 |
 | **V-010** — Token is required | Send a request with no `Authorization` header, then one with a wrong token. Both are refused. | PR-032 | 2 |
 | **V-011** — Origin is refused | Send a request with a valid token and an `Origin` header. It is refused. | PR-033 | 2 |
 | **V-012** — No provider, no change | Put an app that is not a provider in front and use the host. Its behavior and the agent's message match those of a host with the protocol disabled. | PR-039 | 9 |
@@ -238,6 +238,6 @@ Twelve of the 35 Requirements at P0 have a Verification. The 23 without one:
 | Security | PR-031, PR-034 |
 | Host | PR-035, PR-036, PR-037 |
 
-Most of the provider-side gaps close with one schema check: validate a `context_current` and a `context_locate` response against a published JSON Schema (PR-002, PR-003, PR-005, PR-011, PR-018, PR-024, PR-027). That check is the start of a conformance suite another app's author could run, which matters if this is to become a standard.
+Most of the provider-side gaps close with one schema check: validate a `current` and a `locate` response against a published JSON Schema (PR-002, PR-003, PR-005, PR-011, PR-018, PR-024, PR-027). That check is the start of a conformance suite another app's author could run, which matters if this is to become a standard.
 
 The three Host gaps (PR-035 to PR-037) are the hardest to verify from outside. A protocol cannot enforce what a host does with context it has received; these are rules of conduct a host claims to follow. I recommend keeping them as Requirements and marking their Verifications as inspections of the host, not automated checks.

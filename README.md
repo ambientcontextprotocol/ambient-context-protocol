@@ -52,7 +52,7 @@ A provider answers two questions.
 
 The id is short and opaque. It keeps pointing at the same passage after the user types above it, so an agent can refer to `sel-23` minutes later and the host can still find it.
 
-It is an extension to the Model Context Protocol. A provider is a small MCP server on the local machine that offers the two questions as tools, `context_current` and `context_locate`. Any MCP client can call them, including one that has never heard of this protocol.
+It is an extension to the Model Context Protocol. A provider is a small MCP server on the local machine, and the two answers are MCP resources: `ambient-context://current` and `ambient-context://location/{id}`. The host reads them; the agent never calls the app. Any MCP client can list and read them, including one that has never heard of this protocol.
 
 A running provider announces itself with a descriptor file that only the user can read. The file gives the endpoint and a token minted at launch. A host finds the frontmost app's descriptor, connects, and asks.
 
@@ -61,13 +61,13 @@ A running provider announces itself with a descriptor file that only the user ca
 1. *The app says where; the host decides what.* A provider reports items and their positions. It never names what the host draws there.
 2. *An envelope, not a domain model.* The protocol fixes the shape of an item and leaves its type and payload to the app.
 3. *Pulled on the user's action.* A host asks for context when the user does something that calls for it. Provisional in 0.1.
-4. *Any MCP client can use it.* The operations are ordinary MCP tools.
+4. *It is ordinary MCP.* A provider is an MCP server and the two answers are MCP resources.
 
 ## Status
 
 | | |
 |---|---|
-| Specification | Draft 0.1, being rewritten for the MCP binding |
+| Specification | [Draft 0.1](docs/protocol-v0.md) |
 | First provider | [Paper](https://github.com/humanitas-labs/paper), a Markdown editor for macOS. Planned. |
 | First host | Sirius. Planned. |
 | Platforms | macOS first |
@@ -75,4 +75,4 @@ A running provider announces itself with a descriptor file that only the user ca
 ## In this repository
 
 - [`docs/prd.md`](docs/prd.md): the product requirements. Domains, Features, Requirements and how each is verified.
-- [`docs/protocol-v0.md`](docs/protocol-v0.md): the earlier protocol draft. Its item and location shapes are current; its transport section predates the MCP binding.
+- [`docs/protocol-v0.md`](docs/protocol-v0.md): the protocol, draft 0.1. Operations, items, locations, the MCP binding and discovery.

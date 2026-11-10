@@ -653,7 +653,12 @@ export class ContextServer {
         this.#listenerIsReady(listener, pid);
         resolve();
       });
-      listener.once("error", () => resolve());
+      // A listener that could not open is not running: clear the state so
+      // `isRunning` says so and a later `start()` tries again.
+      listener.once("error", () => {
+        if (this.#listener === listener) this.stop();
+        resolve();
+      });
       listener.once("close", () => resolve());
     });
     // A process that exits without `stop()` would leave the descriptor

@@ -36,6 +36,8 @@ final class NotesContext: ContextProvider {
 }
 ```
 
+An item's `payload` takes plain literals: `payload: ["ref": "T-12", "done": false]`.
+
 `current()` is called on the main actor each time a host asks, and should answer from state already in memory. `focus` lists the ids of the items the user is working on now; `items` is everything open. An id is letters, digits, hyphens and underscores, and stays the same for as long as the item exists in this run of the app.
 
 ## Serve it
@@ -46,14 +48,16 @@ let server = ContextServer(
     app: ContextApp(id: Bundle.main.bundleIdentifier!, name: "Notes", version: "1.0")
 )
 server.start()   // when the user turns the feature on
-server.stop()    // when they turn it off, and in applicationWillTerminate
+server.stop()    // when they turn it off, and when the app is about to quit
 ```
 
 Three things an app should do around it:
 
 - Keep the feature off until the user turns it on, and say plainly what it does: while it is on, any program running as the user can ask what is open and selected.
 - Call `ContextDescriptor.removeStale(bundleID:pid:in:)` with `ContextDescriptor.defaultDirectory` at launch, whether or not the feature is on, so a descriptor left by a crash does not outlive it.
-- Call `stop()` before the app exits. The server holds off sudden termination while it runs so that this call is reached.
+- Call `stop()` before the app exits: in `applicationWillTerminate`, or in a SwiftUI app with no app delegate, on `NSApplication.willTerminateNotification`. The server holds off sudden termination while it runs so that this call is reached.
+
+`ContextProvider` and `ContextServer` are main-actor types. In a module that makes the main actor its default isolation (Swift 6.2), the app's own types are main-actor too, so the file that builds `ContextCurrent` from them must be in a module, or a type, that is main-actor isolated as well.
 
 ## Say where it is (optional)
 

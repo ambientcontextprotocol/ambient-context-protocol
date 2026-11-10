@@ -81,6 +81,20 @@ struct PublicInterfaceTests {
     }
 
     @Test
+    func aPayloadIsWrittenAsLiterals() throws {
+        let payload: [String: ContextValue] = [
+            "ref": "T-12", "done": false, "order": 3, "weight": 0.5,
+            "tags": ["home", "week"], "lines": ["start": 3, "end": 4],
+        ]
+        #expect(payload["ref"] == .string("T-12"))
+        #expect(payload["done"] == .bool(false))
+        #expect(payload["order"] == .integer(3))
+        #expect(payload["weight"] == .number(0.5))
+        #expect(payload["tags"] == .array([.string("home"), .string("week")]))
+        #expect(payload["lines"] == .object(["start": .integer(3), "end": .integer(4)]))
+    }
+
+    @Test
     func aProviderThatOnlySaysWhatIsOpen() async throws {
         let (server, descriptor, file) = try await started(Notes())
         #expect(descriptor.pid == ProcessInfo.processInfo.processIdentifier)

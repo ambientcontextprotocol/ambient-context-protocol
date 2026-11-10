@@ -5,9 +5,9 @@
 | Field | Value |
 |---|---|
 | Author | The protocol session, for Andrew Jones, at the request of a provider's author |
-| Status | Draft |
+| Status | Accepted |
 | Created | `2026.11.10` |
-| Decided | — |
+| Decided | `2026.11.10` |
 | Discussion | Not yet opened as a pull request |
 | Specification sections | 7.1 (the server), 8 (discovery, host step 3), 11 (implementing a provider) |
 | Version effect | Additive |
@@ -79,4 +79,6 @@ An outside check can test, against a provider that declares a shared listener: t
 
 ## 10. Decision and outcome
 
-Pending.
+Accepted on 2026.11.10 by Andrew Jones, maintainer, for protocol version `0.2.0`, together with RFC-0001.
+
+Why: it is additive, changes no trust rule, and replaces the proposal for a provider with no token. The open questions in section 9 stay open during implementation. Not yet implemented or released.

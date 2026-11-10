@@ -8,4 +8,3 @@ Every RFC that has a number, with its status. Acceptance does not mean the chang
 |---|---|---|---|---|
 | RFC-0001 | [The element model](0001-element-model.md) | Draft | — | — |
 | RFC-0002 | [A provider on a listener the app already has](0002-shared-listener.md) | Draft | — | — |
-| RFC-0003 | [Object references: search and read](0003-object-references.md) | Draft | — | — |

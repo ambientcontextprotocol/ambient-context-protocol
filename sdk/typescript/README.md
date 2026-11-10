@@ -174,3 +174,9 @@ node examples/minimal.ts    # a provider a host can find, until Ctrl-C
 ```
 
 The tests run on the source with `node --test` and keep their descriptors in a temporary folder.
+
+The package has no dependencies, development ones included, so it carries no TypeScript compiler. To type-check it, run a `tsc` you already have against its own settings, pointing it at a folder that holds `@types/node`:
+
+```sh
+/path/to/node_modules/.bin/tsc -p . --typeRoots /path/to/node_modules/@types
+```

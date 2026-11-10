@@ -4,7 +4,7 @@ Last updated: `2026.11.09`
 
 > A protocol by which a desktop app tells an ambient agent host what the user has open, what they have selected, and where an item is on screen. Version `0.1`. First provider: Paper. First host: Sirius. Task: SIR-0105.
 
-**Status.** Draft for Andrew's review. Nothing here is in the graph. The structure uses the product ontology as edited on 2026.11.09 (Product, Domain, Feature, Requirement, Verification). The requirements restate the design in the [plan](../../paper/.plan/ambient-context-provider.md) and the [protocol draft](protocol-v0.md); most of their wording is Claude's and unconfirmed. All method, field and path names are placeholders.
+**Status.** Draft for Andrew's review. Nothing here is in the graph. The structure uses the product ontology as edited on 2026.11.09 (Domain, Feature, Requirement, Verification; the Product level is left out because this repository holds one product). The requirements restate the design in the [plan](../../paper/.plan/ambient-context-provider.md) and the [protocol draft](protocol-v0.md); most of their wording is Claude's and unconfirmed. All method, field and path names are placeholders.
 
 ## Contents
 
@@ -35,24 +35,22 @@ Last updated: `2026.11.09`
 
 ## 1. Ontology
 
-Five levels. The first four are structure; the fifth says how a requirement is checked.
+Four levels. The first three are structure; the fourth says how a requirement is checked.
 
 | Level | ID | What it is |
 |---|---|---|
-| **Product** | name | A coherent offering with a separable reason to use it. Here: the Ambient Context Protocol. |
-| **Domain** | abbreviation | An area within the Product that groups related Features. |
+| **Domain** | abbreviation | An area of the protocol that groups related Features. |
 | **Feature** | `F-xxn` | A coherent capability, identifiable for planning. Has a priority and one or more Requirements. |
 | **Requirement** | `PR-nnn` | A specific, testable condition the product must satisfy. Specifies one Feature. |
 | **Verification** | `V-nnn` | A defined way of establishing whether one Requirement is met. It does not record that it was run or that it passed. |
 
 ```
-Product: Ambient Context Protocol
-└── Domain: Security
-    └── Feature: F-SE1 Access control (P0)
-        ├── PR-032 "A provider refuses a request that lacks the token."
-        │   └── V-010 "POST to the endpoint with no Authorization header; expect a refusal."
-        └── PR-033 "A provider refuses any request carrying an Origin header."
-            └── V-011 "POST with a valid token and an Origin header; expect a refusal."
+Domain: Security
+└── Feature: F-SE1 Access control (P0)
+    ├── PR-032 "A provider refuses a request that lacks the token."
+    │   └── V-010 "POST to the endpoint with no Authorization header; expect a refusal."
+    └── PR-033 "A provider refuses any request carrying an Origin header."
+        └── V-011 "POST with a valid token and an Origin header; expect a refusal."
 ```
 
 **Priority.** `P0` is in version 0.1. `P1` is next. `P2` and below are named so the design leaves room, and are not built.

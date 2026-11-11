@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Ambient Context Protocol 0.2.0: the answer to current",
+  "description": "What a provider sends when a host reads ambient://current. Specification sections 4.1 and 5. Three rules cannot be stated here and are checked separately: every id is unique within the answer, the focused elements form one path down from the root with no gaps, and at most one element is hovered.",
+  "type": "object",
+  "required": ["protocol", "instance", "root"],
+  "additionalProperties": false,
+  "properties": {
+    "protocol": { "const": "0.2.0" },
+    "instance": { "type": "string", "minLength": 1 },
+    "root": {
+      "allOf": [
+        { "$ref": "#/$defs/element" },
+        { "properties": { "role": { "const": "Application" } } }
+      ]
+    }
+  },
+  "$defs": {
+    "element": {
+      "type": "object",
+      "required": ["id", "role"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" },
+        "role": {
+          "enum": [
+            "Application", "Window",
+            "Group", "List", "Table",
+            "Row", "Cell",
+            "Text", "Heading", "Link",
+            "Image", "Page",
+            "Document"
+          ]
+        },
+        "subrole": { "type": "string", "minLength": 1 },
+        "title": { "type": "string" },
+        "content": { "type": "array", "items": { "$ref": "#/$defs/contentBlock" } },
+        "url": { "type": "string", "minLength": 1 },
+        "selected": { "const": true, "description": "Sent only when true." },
+        "focused": { "const": true, "description": "Sent only when true." },
+        "hovered": { "const": true, "description": "Sent only when true." },
+        "visible": { "type": "boolean" },
+        "children": {
+          "type": "array",
+          "minItems": 1,
+          "description": "An empty list is not sent. Only the root is an Application.",
+          "items": {
+            "allOf": [
+              { "$ref": "#/$defs/element" },
+              { "not": { "properties": { "role": { "const": "Application" } }, "required": ["role"] } }
+            ]
+          }
+        },
+        "attributes": {
+          "type": "object",
+          "properties": {
+            "author": { "type": "string" },
+            "related": { "type": "array", "items": { "type": "object" } }
+          }
+        }
+      }
+    },
+    "contentBlock": {
+      "description": "MCP's ContentBlock, schema 2026-07-28, unchanged. Only the fields MCP requires are checked.",
+      "type": "object",
+      "required": ["type"],
+      "oneOf": [
+        { "properties": { "type": { "const": "text" } }, "required": ["text"] },
+        { "properties": { "type": { "const": "image" } }, "required": ["data", "mimeType"] },
+        { "properties": { "type": { "const": "audio" } }, "required": ["data", "mimeType"] },
+        { "properties": { "type": { "const": "resource_link" } }, "required": ["uri", "name"] },
+        { "properties": { "type": { "const": "resource" } }, "required": ["resource"] }
+      ]
+    }
+  }
+}

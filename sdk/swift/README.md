@@ -1,6 +1,6 @@
 # Ambient Context for Swift
 
-Makes a macOS app a provider of the [Ambient Context Protocol](../../docs/protocol-v0.md), draft 0.1: it runs the local server, answers the protocol's requests and keeps the descriptor file a host finds the app by. The app writes one thing, a description of what the user has open and selected.
+Makes a macOS app a provider of the [Ambient Context Protocol](../../docs/spec/index.md), draft 0.1: it runs the local server, answers the protocol's requests and keeps the descriptor file a host finds the app by. The app writes one thing, a description of what the user has open and selected.
 
 It has no dependencies beyond Foundation and Network, and needs macOS 14 or later.
 

@@ -1,10 +1,10 @@
 # Ambient Context Protocol · Product Model
 
-Last updated: `2026.11.09`
+Last updated: `2026.11.10`
 
-> A protocol by which a desktop app tells an ambient agent host what the user has open, what they have selected, and where an item is on screen. Version `0.1`. First provider: Paper. First host: Sirius. Task: SIR-0105.
+> A protocol by which a desktop app tells an ambient agent host what the user has open, what they have selected, and where an element is on screen. Version `0.2.0`; requirements are marked with the versions they hold in. First provider: Paper. First host: Sirius. Task: SIR-0105.
 
-**Status.** Draft for Andrew's review. Nothing here is in the graph. The structure uses the product ontology as edited on 2026.11.09 (Domain, Feature, Requirement, Verification; the Product level is left out because this repository holds one product). The requirements restate the design in the [plan](../../paper/.plan/ambient-context-provider.md) and the [protocol draft](protocol-v0.md); most of their wording is Claude's and unconfirmed. All method, field and path names are placeholders.
+**Status.** Draft for Andrew's review. Nothing here is in the graph. The structure uses the product ontology as edited on 2026.11.09 (Domain, Feature, Requirement, Verification; the Product level is left out because this repository holds one product). The requirements restate the design in the [plan](../../paper/.plan/ambient-context-provider.md) and the [protocol draft](spec/index.md); most of their wording is Claude's and unconfirmed. All method, field and path names are placeholders.
 
 ## Contents
 
@@ -27,8 +27,8 @@ Last updated: `2026.11.09`
 ## Principles
 
 1. *The app says where; the host decides what.* A provider reports items and their positions. It never names what the host draws there.
-2. *An envelope, not a domain model.* The protocol fixes the shape of an item and leaves its type and payload to the app. A text editor, a task tracker and a design tool all fit without the protocol knowing what a document, a task or a frame is.
-3. *Pulled on the user's action.* A host asks for context when the user does something that calls for it. A provider does not push, and a host does not poll. Provisional: this holds for version 0.1 and may change.
+2. *A shared language for how a thing is shown, the app's own word for what it is.* Every element has a role from a short fixed list; what the thing is to the app goes in its subrole and attributes. A text editor, a task tracker and a design tool all fit without the protocol knowing what a task or a frame is. (In 0.1: an envelope, not a domain model.)
+3. *Pulled on the user's action.* A host asks for context when the user does something that calls for it. A provider does not push, and a host does not poll. Provisional: this holds for version 0.2.0 and may change.
 4. *It is ordinary MCP.* A provider is an MCP server and the two answers are MCP resources. A client that has never heard of the protocol can still list and read them.
 
 ---
@@ -53,7 +53,7 @@ Domain: Security
         └── V-011 "POST with a valid token and an Origin header; expect a refusal."
 ```
 
-**Priority.** `P0` is in version 0.1. `P1` is next. `P2` and below are named so the design leaves room, and are not built.
+**Priority.** `P0` is in the version named in "Since". `P1` is next. `P2` and below are named so the design leaves room, and are not built.
 
 **Who must satisfy it.** Each Requirement binds a provider, a host, or both. The "On" column says which.
 
@@ -78,137 +78,164 @@ Domain: Security
 
 Each Feature is followed by the Requirements that specify it. "On" says who must satisfy the Requirement. "Verified by" points to [§4](#4-verifications); a dash means no Verification is defined yet.
 
+**Versions.** "Since" is the first protocol version a Requirement holds in. "Until" is the last; a dash means it still holds. "RFC" names the proposal that added it. A Requirement is never reworded when the protocol changes: it is retired and a new one takes its place, so the list for any version can be read back exactly. `python3 tools/requirements.py 0.2.0` prints the Requirements of a version. In Requirements that date from 0.1, "item" means what 0.2.0 calls an element.
+
 ### 3.1 — Context
 
 **F-CX1 — Current context** · P0. A provider reports the items the user has open and which are in focus.
 
-| Requirement | Statement | On | Priority | Verified by |
-|---|---|---|---|---|
-| **PR-001** — Current | On request, a provider returns in one response the items the user has open in the app and the focus. | Provider | P0 | V-001 |
-| **PR-002** — Item shape | Every item has `id`, `type` and `title`. An item may have `content`, `url`, `parent`, `locatable` and `payload`. | Provider | P0 | — |
-| **PR-003** — Focus | The response names the focus as an ordered list of item ids. A selection is an item whose `parent` is the item it was made in. | Provider | P0 | — |
-| **PR-004** — Response time | A provider answers a request for current context from state it already holds, without waiting on disk or network. A host sets its own time limit and proceeds without context when the limit passes. | Both | P0 | V-002 |
+| Requirement | Statement | On | Priority | Verified by | Since | Until | RFC |
+|---|---|---|---|---|---|---|---|
+| **PR-001** — Current | On request, a provider returns in one response the items the user has open in the app and the focus. | Provider | P0 | V-001 | 0.1 | 0.1 | — |
+| **PR-002** — Item shape | Every item has `id`, `type` and `title`. An item may have `content`, `url`, `parent`, `locatable` and `payload`. | Provider | P0 | — | 0.1 | 0.1 | — |
+| **PR-003** — Focus | The response names the focus as an ordered list of item ids. A selection is an item whose `parent` is the item it was made in. | Provider | P0 | — | 0.1 | 0.1 | — |
+| **PR-004** — Response time | A provider answers a request for current context from state it already holds, without waiting on disk or network. A host sets its own time limit and proceeds without context when the limit passes. | Both | P0 | V-002 | 0.1 | — | — |
+| **PR-047** — Current as a tree | On request, a provider returns in one response an object with exactly `protocol`, `instance` and `root`. `root` is one tree of elements holding everything the provider reports. Replaces PR-001. | Provider | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
+| **PR-048** — Element shape | Every element has `id` and `role`. An element may have `subrole`, `title`, `content`, `url`, `selected`, `focused`, `visible`, `hovered`, `children` and `attributes`. An empty `children` list is not sent. Replaces PR-002. | Provider | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
+| **PR-049** — Role language | Every `role` is one of the thirteen in the specification, §5.2. The root is an `Application` and no other element is. A provider does not report controls, menus, indicators or window furniture. | Provider | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
+| **PR-050** — State said once | A provider states `selected`, `focused`, `visible` and `hovered` only on the element they describe. `selected`, `focused` and `hovered` are sent only when true. | Provider | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
+| **PR-051** — Focus path | `focused` is set on every element on the path from a child of the root to the user's position, with no gaps. No two siblings are focused, and no element below the root's children is focused unless its parent is. Replaces PR-003. | Provider | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
+| **PR-052** — Absent states | A host reads an absent `selected`, `focused` or `hovered` as false and an absent `visible` as the parent's value, with the root visible. | Host | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
+| **PR-053** — Hover is one element | At most one element in an answer has `hovered` true: the innermost reported element under the pointer. No ancestor or descendant of it is marked. | Provider | P0 | — | 0.2.0 | — | [0003](rfcs/0003-hovered-state.md) |
+| **PR-054** — Hover is true | An element marked `hovered` is the one under the pointer when the provider answers. A provider creates no element in order to mark it. | Provider | P0 | — | 0.2.0 | — | [0003](rfcs/0003-hovered-state.md) |
+| **PR-055** — Absent hover | A host infers nothing from `hovered` being absent everywhere. | Host | P0 | — | 0.2.0 | — | [0003](rfcs/0003-hovered-state.md) |
 
 **F-CX2 — Content** · P0. An item carries its content in a form any agent can read.
 
-| Requirement | Statement | On | Priority | Verified by |
-|---|---|---|---|---|
-| **PR-005** — Content blocks | `content` is a list of MCP content blocks, unchanged from the MCP specification. | Provider | P0 | — |
-| **PR-006** — Open types | `type` is an open string and `payload` is app-defined. The protocol defines no item types beyond the envelope. | Both | P0 | — |
-| **PR-046** — Limits | A provider stays within stated bounds on the size of an item's content, the number of items in one answer and the number of ids it keeps alive. The bounds are not set yet (protocol §13, question 3). | Provider | P1 | — |
+| Requirement | Statement | On | Priority | Verified by | Since | Until | RFC |
+|---|---|---|---|---|---|---|---|
+| **PR-005** — Content blocks | `content` is a list of MCP content blocks, unchanged from the MCP specification. | Provider | P0 | — | 0.1 | — | — |
+| **PR-006** — Open types | `type` is an open string and `payload` is app-defined. The protocol defines no item types beyond the envelope. | Both | P0 | — | 0.1 | 0.1 | — |
+| **PR-046** — Limits | A provider stays within stated bounds on the size of an item's content, the number of items in one answer and the number of ids it keeps alive. The bounds are not set yet (protocol §13, question 3). | Provider | P1 | — | 0.1 | — | — |
+| **PR-056** — Open subrole and attributes | `subrole` is an open string and `attributes` is app-defined. A provider puts its own word for a thing in `subrole`, never in `role`, and gives a subrole to each thing that is the app's own kind. Replaces PR-006. | Both | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
+| **PR-057** — Relations | A link between two elements that is not containment is expressed in the `related` attribute. | Provider | P1 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
+| **PR-058** — Author | A provider sends the `author` attribute only where the app already shows the author. | Provider | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
 
 **F-CX3 — Changes since** · P2. A provider reports what changed since a given point.
 
-| Requirement | Statement | On | Priority | Verified by |
-|---|---|---|---|---|
-| **PR-007** — Changes since | A provider returns the items added, changed and removed since a point the host names. | Provider | P2 | — |
+| Requirement | Statement | On | Priority | Verified by | Since | Until | RFC |
+|---|---|---|---|---|---|---|---|
+| **PR-007** — Changes since | A provider returns the items added, changed and removed since a point the host names. | Provider | P2 | — | 0.1 | — | — |
 
 ### 3.2 — Identity
 
 **F-ID1 — Item ids** · P0. Every item has a short id that keeps meaning the same thing.
 
-| Requirement | Statement | On | Priority | Verified by |
-|---|---|---|---|---|
-| **PR-008** — Opaque ids | An id is a short string minted by the provider, such as `sel-23`. A host does not parse it. | Both | P0 | — |
-| **PR-009** — Stable under edits | An id keeps referring to the same item after the surrounding content is edited. | Provider | P0 | V-003, V-019 |
-| **PR-010** — No reuse | A provider does not reuse an id while it is running. When the item no longer exists, the provider says it is gone. | Provider | P0 | — |
+| Requirement | Statement | On | Priority | Verified by | Since | Until | RFC |
+|---|---|---|---|---|---|---|---|
+| **PR-008** — Opaque ids | An id is a short string minted by the provider, such as `sel-23`. A host does not parse it. | Both | P0 | — | 0.1 | — | — |
+| **PR-009** — Stable under edits | An id keeps referring to the same item after the surrounding content is edited. | Provider | P0 | V-003, V-019 | 0.1 | — | — |
+| **PR-010** — No reuse | A provider does not reuse an id while it is running. When the item no longer exists, the provider says it is gone. | Provider | P0 | — | 0.1 | — | — |
+| **PR-059** — Id form and uniqueness | An id is 1 to 128 letters, digits, hyphens and underscores, and is unique within one answer. The same thing shown twice is two elements with two ids. | Provider | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
 
 **F-ID2 — Provider instance** · P0. An id is tied to the provider that issued it and to one run of that provider.
 
-| Requirement | Statement | On | Priority | Verified by |
-|---|---|---|---|---|
-| **PR-040** — Instance value | A provider mints a random `instance` value each time it starts, returns it with current context and writes it in its descriptor. | Provider | P0 | V-013 |
-| **PR-041** — Provider kept with the id | A host records which provider and which `instance` issued every id it passes to an agent. It resolves an id only with that provider and only while the instance is unchanged, and otherwise treats the item as gone. It never looks an id up again by app name or process id. | Host | P0 | V-014 |
+| Requirement | Statement | On | Priority | Verified by | Since | Until | RFC |
+|---|---|---|---|---|---|---|---|
+| **PR-040** — Instance value | A provider mints a random `instance` value each time it starts, returns it with current context and writes it in its descriptor. | Provider | P0 | V-013 | 0.1 | — | — |
+| **PR-041** — Provider kept with the id | A host records which provider and which `instance` issued every id it passes to an agent. It resolves an id only with that provider and only while the instance is unchanged, and otherwise treats the item as gone. It never looks an id up again by app name or process id. | Host | P0 | V-014 | 0.1 | — | — |
 
 ### 3.3 — Location
 
 **F-LO1 — Locate** · P0. Given an id, a provider says where the item is on screen.
 
-| Requirement | Statement | On | Priority | Verified by |
-|---|---|---|---|---|
-| **PR-011** — Locate | Given an id, a provider returns a location: `state` (`visible`, `offscreen` or `gone`), `rects` and `window`. | Provider | P0 | — |
-| **PR-012** — Coordinates | Rectangles are in global screen coordinates, in points, with the origin at the top left of the primary display. | Provider | P0 | V-021 |
-| **PR-013** — Accuracy | Rectangles agree, within 2 points, with what the platform accessibility API reports for the same item. | Provider | P0 | V-004, V-020 |
-| **PR-014** — Placement hints | A location may carry `avoid` (a rectangle the host should not cover) and `edge` (the side the provider prefers). A host may ignore both. | Both | P0 | — |
-| **PR-015** — No host UI in the protocol | No message names a host interface element. A provider cannot ask a host to draw anything. | Both | P0 | — |
+| Requirement | Statement | On | Priority | Verified by | Since | Until | RFC |
+|---|---|---|---|---|---|---|---|
+| **PR-011** — Locate | Given an id, a provider returns a location: `state` (`visible`, `offscreen` or `gone`), `rects` and `window`. | Provider | P0 | — | 0.1 | — | — |
+| **PR-012** — Coordinates | Rectangles are in global screen coordinates, in points, with the origin at the top left of the primary display. | Provider | P0 | V-021 | 0.1 | — | — |
+| **PR-013** — Accuracy | Rectangles agree, within 2 points, with what the platform accessibility API reports for the same item. | Provider | P0 | V-004, V-020 | 0.1 | — | — |
+| **PR-014** — Placement hints | A location may carry `avoid` (a rectangle the host should not cover) and `edge` (the side the provider prefers). A host may ignore both. | Both | P0 | — | 0.1 | — | — |
+| **PR-060** — An element that cannot be placed | A provider that cannot place a particular element answers `locate` for it as for an id it never issued. Whether an element can be located is not declared in advance. | Provider | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
+| **PR-015** — No host UI in the protocol | No message names a host interface element. A provider cannot ask a host to draw anything. | Both | P0 | — | 0.1 | — | — |
 
 **F-LO2 — Watch** · P3. A provider tells the host when an item moves.
 
-| Requirement | Statement | On | Priority | Verified by |
-|---|---|---|---|---|
-| **PR-016** — Watch | A provider notifies the host when a located item moves, scrolls out of view or is removed. | Provider | P3 | — |
+| Requirement | Statement | On | Priority | Verified by | Since | Until | RFC |
+|---|---|---|---|---|---|---|---|
+| **PR-016** — Watch | A provider notifies the host when a located item moves, scrolls out of view or is removed. | Provider | P3 | — | 0.1 | — | — |
 
 ### 3.4 — Discovery
 
 **F-DI1 — Announce** · P0. A running provider writes a descriptor file a host can read.
 
-| Requirement | Statement | On | Priority | Verified by |
-|---|---|---|---|---|
-| **PR-017** — Descriptor | While it is running and enabled, a provider keeps a descriptor file at `~/Library/Application Support/AmbientContext/providers/<bundle-id>.<pid>.json`. | Provider | P0 | V-005 |
-| **PR-018** — Descriptor fields | The descriptor holds `protocol`, `app`, `pid`, `instance`, `endpoint`, `token` and `started`. | Provider | P0 | — |
-| **PR-019** — Descriptor permissions | The providers folder is mode `0700` and each descriptor is mode `0600`. | Provider | P0 | V-006 |
-| **PR-020** — Descriptor removal | A provider removes its descriptor when it quits. A host ignores a descriptor whose `pid` is not running. | Both | P0 | V-007, V-016 |
-| **PR-021** — Off means absent | When the user has turned the provider off, it writes no descriptor and opens no listener. | Provider | P0 | V-008 |
-| **PR-042** — Atomic write | A provider writes its descriptor after its listener is up, to a temporary name in the same folder, then renames it into place. | Provider | P0 | — |
-| **PR-043** — Endpoint check | Before using a descriptor, a host checks that the endpoint's address is `127.0.0.1` and that the process listening on its port is the process the descriptor names. It does not follow redirects, and it ignores an answer whose `instance` differs from the descriptor's. | Host | P0 | V-015 |
+| Requirement | Statement | On | Priority | Verified by | Since | Until | RFC |
+|---|---|---|---|---|---|---|---|
+| **PR-017** — Descriptor | While it is running and enabled, a provider keeps a descriptor file at `~/Library/Application Support/AmbientContext/providers/<bundle-id>.<pid>.json`. | Provider | P0 | V-005 | 0.1 | — | — |
+| **PR-018** — Descriptor fields | The descriptor holds `protocol`, `app`, `pid`, `instance`, `endpoint`, `token` and `started`. | Provider | P0 | — | 0.1 | — | — |
+| **PR-019** — Descriptor permissions | The providers folder is mode `0700` and each descriptor is mode `0600`. | Provider | P0 | V-006 | 0.1 | — | — |
+| **PR-020** — Descriptor removal | A provider removes its descriptor when it quits. A host ignores a descriptor whose `pid` is not running. | Both | P0 | V-007, V-016 | 0.1 | — | — |
+| **PR-021** — Off means absent | When the user has turned the provider off, it writes no descriptor and opens no listener. | Provider | P0 | V-008 | 0.1 | — | — |
+| **PR-042** — Atomic write | A provider writes its descriptor after its listener is up, to a temporary name in the same folder, then renames it into place. | Provider | P0 | — | 0.1 | — | — |
+| **PR-043** — Endpoint check | Before using a descriptor, a host checks that the endpoint's address is `127.0.0.1` and that the process listening on its port is the process the descriptor names. It does not follow redirects, and it ignores an answer whose `instance` differs from the descriptor's. | Host | P0 | V-015 | 0.1 | — | — |
+| **PR-061** — Answer version | A host ignores an answer whose `protocol` differs from the descriptor's. | Host | P0 | — | 0.2.0 | — | — |
 
 **F-DI2 — Discovery without a descriptor** · P2. A provider that cannot announce itself with a descriptor is still found.
 
-| Requirement | Statement | On | Priority | Verified by |
-|---|---|---|---|---|
-| **PR-022** — Discovery without a descriptor | A provider that cannot write to the shared folder (a sandboxed Mac app) or cannot listen (a web page) can still be found and read. The mechanism is not designed; connecting out to the host is one candidate. | Both | P2 | — |
+| Requirement | Statement | On | Priority | Verified by | Since | Until | RFC |
+|---|---|---|---|---|---|---|---|
+| **PR-022** — Discovery without a descriptor | A provider that cannot write to the shared folder (a sandboxed Mac app) or cannot listen (a web page) can still be found and read. The mechanism is not designed; connecting out to the host is one candidate. | Both | P2 | — | 0.1 | — | — |
 
 ### 3.5 — Binding
 
 **F-BI1 — MCP binding** · P0. The protocol's operations are MCP resources on a local MCP server.
 
-| Requirement | Statement | On | Priority | Verified by |
-|---|---|---|---|---|
-| **PR-023** — MCP server | A provider is an MCP server reached by `POST /mcp` at the descriptor's `endpoint`. | Provider | P0 | — |
-| **PR-024** — Two resources | The provider offers `current` as the resource `ambient://current` and `locate` as the resource template `ambient://location/{id}`. Each is read with `resources/read` and returns one JSON document. The host's code reads them; the model does not call them. | Provider | P0 | — |
-| **PR-025** — Any MCP client | An MCP client with no knowledge of this protocol can list and read both resources, given only the endpoint and token. | Provider | P0 | V-009 |
-| **PR-026** — MCP versions | The provider speaks MCP `2026-07-28`. It should also serve clients that use the older `initialize` handshake, following that revision's rules for requests, results and errors. | Provider | P0 | — |
-| **PR-044** — Request metadata | A host sends `protocolVersion` and `clientCapabilities` in `_meta` on every request, as MCP `2026-07-28` requires. A provider refuses a request missing either with HTTP `400` and error `-32602`. | Both | P0 | V-017 |
+| Requirement | Statement | On | Priority | Verified by | Since | Until | RFC |
+|---|---|---|---|---|---|---|---|
+| **PR-023** — MCP server | A provider is an MCP server reached by `POST /mcp` at the descriptor's `endpoint`. | Provider | P0 | — | 0.1 | 0.1 | — |
+| **PR-024** — Two resources | The provider offers `current` as the resource `ambient://current` and `locate` as the resource template `ambient://location/{id}`. Each is read with `resources/read` and returns one JSON document. The host's code reads them; the model does not call them. | Provider | P0 | — | 0.1 | — | — |
+| **PR-025** — Any MCP client | An MCP client with no knowledge of this protocol can list and read both resources, given only the endpoint and token. | Provider | P0 | V-009 | 0.1 | — | — |
+| **PR-026** — MCP versions | The provider speaks MCP `2026-07-28`. It should also serve clients that use the older `initialize` handshake, following that revision's rules for requests, results and errors. | Provider | P0 | — | 0.1 | — | — |
+| **PR-044** — Request metadata | A host sends `protocolVersion` and `clientCapabilities` in `_meta` on every request, as MCP `2026-07-28` requires. A provider refuses a request missing either with HTTP `400` and error `-32602`. | Both | P0 | V-017 | 0.1 | 0.1 | — |
+| **PR-062** — Endpoint path | A provider is an MCP server reached by `POST` at the descriptor's `endpoint`. The path is the provider's choice, begins with `/` and has no query or fragment; a host uses it as given. Replaces PR-023. | Both | P0 | — | 0.2.0 | — | [0002](rfcs/0002-shared-listener.md) |
+| **PR-063** — Shared listener | On a listener the app shares with other routes, the token and `Origin` checks are enforced on the endpoint's path before any other handling. The path does not answer a cross-origin preflight with permission, and no response from it carries an `Access-Control-Allow-*` header. | Provider | P0 | — | 0.2.0 | — | [0002](rfcs/0002-shared-listener.md) |
+| **PR-064** — Request metadata by revision | A host sends `protocolVersion` and `clientCapabilities` in `_meta` on every request, as MCP `2026-07-28` requires. A provider refuses a request that names `2026-07-28` and lacks either, with HTTP `400` and error `-32602`. A request that names no MCP version is served as an older client. Replaces PR-044. | Both | P0 | — | 0.2.0 | — | — |
+| **PR-065** — Refusals | A provider answers an HTTP method other than `POST` with `405`, an oversized request with `413`, and a required MCP header that is missing or disagrees with the body with `400` and error `-32020`. | Provider | P0 | — | 0.2.0 | — | — |
 
 ### 3.6 — Compatibility
 
 **F-CO1 — Versioning** · P0. Both sides know which version the other speaks and degrade safely.
 
-| Requirement | Statement | On | Priority | Verified by |
-|---|---|---|---|---|
-| **PR-027** — Declared version | A provider declares the protocol and its version as an MCP extension: `"org.humanitas/ambient-context": {"version": "0.1"}`. | Provider | P0 | — |
-| **PR-028** — Version in the descriptor | The descriptor's `protocol` field carries the same version, so a host can decide before connecting. | Provider | P0 | — |
-| **PR-029** — Unknown fields | Both sides ignore fields they do not recognize. | Both | P0 | — |
-| **PR-030** — Unsupported version | A host that does not support a provider's version treats the app as if it were not a provider. | Host | P0 | — |
+| Requirement | Statement | On | Priority | Verified by | Since | Until | RFC |
+|---|---|---|---|---|---|---|---|
+| **PR-027** — Declared version | A provider declares the protocol and its version as an MCP extension: `"org.humanitas/ambient-context": {"version": "0.1"}`. | Provider | P0 | — | 0.1 | 0.1 | — |
+| **PR-028** — Version in the descriptor | The descriptor's `protocol` field carries the same version, so a host can decide before connecting. | Provider | P0 | — | 0.1 | — | — |
+| **PR-029** — Unknown fields | Both sides ignore fields they do not recognize. | Both | P0 | — | 0.1 | — | — |
+| **PR-030** — Unsupported version | A host that does not support a provider's version treats the app as if it were not a provider. | Host | P0 | — | 0.1 | — | — |
+| **PR-066** — Declared version, three places | A provider gives the same version, `0.2.0`, in the MCP extension `"org.humanitas/ambient-context": {"version": "0.2.0"}`, in the descriptor and in the `current` answer. Replaces PR-027. | Provider | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
+| **PR-067** — Version agreement | Before 1.0 a host and a provider work together only if they agree on the major and minor parts of the version. A patch version only adds. | Both | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
+| **PR-068** — Unknown role | A receiver treats a role it does not know as `Group`. | Both | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
 
 ### 3.7 — Security
 
 **F-SE1 — Access control** · P0. Only a local process that can read the user's descriptor can call a provider. A hostile program already running as the user is outside what version 0.1 defends against: it can read the token, and the user's documents, without this protocol. The token shows that a caller can read the user's files, not that the user approved the caller.
 
-| Requirement | Statement | On | Priority | Verified by |
-|---|---|---|---|---|
-| **PR-031** — Loopback only | A provider listens on `127.0.0.1` only. | Provider | P0 | — |
-| **PR-032** — Token required | A provider refuses a request that lacks `Authorization: Bearer <token>` with the descriptor's token. | Provider | P0 | V-010 |
-| **PR-033** — No browser origin | A provider refuses any request that carries an `Origin` header. A host does not send one. | Both | P0 | V-011 |
-| **PR-034** — Token lifetime | A provider mints a new token at each launch and stores it nowhere but the descriptor. | Provider | P0 | — |
+| Requirement | Statement | On | Priority | Verified by | Since | Until | RFC |
+|---|---|---|---|---|---|---|---|
+| **PR-031** — Loopback only | A provider listens on `127.0.0.1` only. | Provider | P0 | — | 0.1 | — | — |
+| **PR-032** — Token required | A provider refuses a request that lacks `Authorization: Bearer <token>` with the descriptor's token. | Provider | P0 | V-010 | 0.1 | — | — |
+| **PR-033** — No browser origin | A provider refuses any request that carries an `Origin` header. A host does not send one. | Both | P0 | V-011 | 0.1 | — | — |
+| **PR-034** — Token lifetime | A provider mints a new token at each launch and stores it nowhere but the descriptor. | Provider | P0 | — | 0.1 | — | — |
+| **PR-069** — Token for this endpoint only | The token is not a credential the app's server accepts anywhere else. | Provider | P0 | — | 0.2.0 | — | [0002](rfcs/0002-shared-listener.md) |
+| **PR-070** — Nothing in logs | A provider writes neither its token nor anything from an answer to a log. | Provider | P0 | — | 0.2.0 | — | [0002](rfcs/0002-shared-listener.md) |
 
 ### 3.8 — Host
 
 **F-HO1 — Consent** · P0. The user sees what context will be sent and can remove it.
 
-| Requirement | Statement | On | Priority | Verified by |
-|---|---|---|---|---|
-| **PR-035** — User action | A host requests context only in response to an action by the user. | Host | P0 | — |
-| **PR-036** — Shown and removable | Before context is sent to an agent, the host shows the user what will be sent and lets them remove it. | Host | P0 | — |
-| **PR-045** — Removed means removed | If the user removes context, or sends the message, while a provider's answer is still on its way, the host discards the late answer. | Host | P0 | V-018 |
+| Requirement | Statement | On | Priority | Verified by | Since | Until | RFC |
+|---|---|---|---|---|---|---|---|
+| **PR-035** — User action | A host requests context only in response to an action by the user. | Host | P0 | — | 0.1 | — | — |
+| **PR-036** — Shown and removable | Before context is sent to an agent, the host shows the user what will be sent and lets them remove it. | Host | P0 | — | 0.1 | — | — |
+| **PR-045** — Removed means removed | If the user removes context, or sends the message, while a provider's answer is still on its way, the host discards the late answer. | Host | P0 | V-018 | 0.1 | — | — |
 
 **F-HO2 — Scope** · P0. A host limits how much context it takes and from which apps.
 
-| Requirement | Statement | On | Priority | Verified by |
-|---|---|---|---|---|
-| **PR-037** — Front app in full | A host takes full context from the frontmost app only. | Host | P0 | — |
-| **PR-038** — Other apps in one line | For each other visible app that is a provider, a host may include one line naming the app and its focused item. | Host | P1 | — |
-| **PR-039** — No provider, no change | With an app in front that is not a provider, a host behaves exactly as it would without the protocol. | Host | P0 | V-012 |
+| Requirement | Statement | On | Priority | Verified by | Since | Until | RFC |
+|---|---|---|---|---|---|---|---|
+| **PR-037** — Front app in full | A host takes full context from the frontmost app only. | Host | P0 | — | 0.1 | — | — |
+| **PR-038** — Other apps in one line | For each other visible app that is a provider, a host may include one line naming the app and its focused item. | Host | P1 | — | 0.1 | — | — |
+| **PR-039** — No provider, no change | With an app in front that is not a provider, a host behaves exactly as it would without the protocol. | Host | P0 | V-012 | 0.1 | — | — |
+| **PR-071** — Hover is weaker | A host presents `hovered` to an agent as where the pointer is, distinct from and weaker than `selected`, and sends no more of an element's content because it is hovered. | Host | P0 | — | 0.2.0 | — | [0003](rfcs/0003-hovered-state.md) |
 
 ---
 
@@ -243,6 +270,8 @@ Each Verification checks one Requirement; a Requirement may have several. The "P
 ---
 
 ## 5. Coverage
+
+*Version 0.2.0.* 64 Requirements hold, 58 of them at P0, and 16 of those have a Verification. None of the 24 P0 Requirements added in 0.2.0 has one yet: most are checks on the shape of an answer, which the schema (`schema/current-0.2.0.json`) and the outside check (ACP-0001) define, and their Verifications are added with that work. The rest of this section was written for 0.1 and is kept as the record of that version.
 
 Eighteen of the 41 Requirements at P0 have a Verification. The 23 without one:
 

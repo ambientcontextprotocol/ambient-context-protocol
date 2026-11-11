@@ -9,7 +9,7 @@
 | Created | `YYYY.MM.DD` |
 | Decided | {Left empty by the author. A maintainer fills the date of the decision} |
 | Discussion | {Link to the pull request, issue or discussion} |
-| Specification sections | {Sections of docs/protocol-v0.md this changes} |
+| Specification sections | {Sections of docs/spec/ this changes} |
 | Version effect | {Breaking, additive or none; see the process, section 6} |
 | Supersedes or amends | {RFC numbers, or none} |
 | Released in | {Filled when a released version contains it} |

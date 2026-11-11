@@ -1,11 +1,11 @@
 ---
-name: Candidate
+name: RFC candidate
 about: A need the protocol might have to meet, with the evidence for it. No design; an RFC answers it.
 title: ""
-labels: candidate
+labels: rfc-candidate
 ---
 
-<!-- A candidate records a need and what was observed. It does not propose a solution; that is what an RFC is for. Keep each section short. For a bug in a package or in the conformance check, open an ordinary issue instead. -->
+<!-- An RFC candidate records a need and what was observed. It does not propose a solution; that is what an RFC is for. Keep each section short. For a bug in a package or in the conformance check, open an ordinary issue instead. -->
 
 ## 1. Need
 

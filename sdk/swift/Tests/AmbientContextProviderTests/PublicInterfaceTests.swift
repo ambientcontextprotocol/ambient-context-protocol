@@ -7,17 +7,20 @@ import AmbientContextProvider
 @MainActor
 struct PublicInterfaceTests {
     final class Notes: ContextProvider {
-        func current() -> ContextCurrent {
-            ContextCurrent(focus: ["note-1"], items: [
-                ContextItem(id: "note-1", type: "note", title: "Groceries", content: [.text("Eggs, rice")]),
+        func current() -> ContextElement {
+            ContextElement(id: "app", role: .application, title: "Notes", children: [
+                ContextElement(
+                    id: "note-1", role: .document, subrole: "note", title: "Groceries",
+                    content: [.text("Eggs, rice")], focused: true
+                ),
             ])
         }
     }
 
     final class LocatedNotes: ContextProvider, ContextLocator {
-        func current() -> ContextCurrent {
-            ContextCurrent(focus: ["note-1"], items: [
-                ContextItem(id: "note-1", type: "note", title: "Groceries", locatable: true),
+        func current() -> ContextElement {
+            ContextElement(id: "app", role: .application, title: "Notes", children: [
+                ContextElement(id: "note-1", role: .document, subrole: "note", title: "Groceries", focused: true),
             ])
         }
 
@@ -81,17 +84,17 @@ struct PublicInterfaceTests {
     }
 
     @Test
-    func aPayloadIsWrittenAsLiterals() throws {
-        let payload: [String: ContextValue] = [
+    func attributesAreWrittenAsLiterals() throws {
+        let attributes: [String: ContextValue] = [
             "ref": "T-12", "done": false, "order": 3, "weight": 0.5,
             "tags": ["home", "week"], "lines": ["start": 3, "end": 4],
         ]
-        #expect(payload["ref"] == .string("T-12"))
-        #expect(payload["done"] == .bool(false))
-        #expect(payload["order"] == .integer(3))
-        #expect(payload["weight"] == .number(0.5))
-        #expect(payload["tags"] == .array([.string("home"), .string("week")]))
-        #expect(payload["lines"] == .object(["start": .integer(3), "end": .integer(4)]))
+        #expect(attributes["ref"] == .string("T-12"))
+        #expect(attributes["done"] == .bool(false))
+        #expect(attributes["order"] == .integer(3))
+        #expect(attributes["weight"] == .number(0.5))
+        #expect(attributes["tags"] == .array([.string("home"), .string("week")]))
+        #expect(attributes["lines"] == .object(["start": .integer(3), "end": .integer(4)]))
     }
 
     @Test
@@ -101,8 +104,10 @@ struct PublicInterfaceTests {
 
         let current = try document(try await call(descriptor, "resources/read", uri: "ambient://current"))
         #expect(current["instance"] as? String == descriptor.instance)
-        #expect((current["app"] as? [String: String])?["id"] == "org.example.notes")
-        #expect((current["items"] as? [[String: Any]])?.first?["title"] as? String == "Groceries")
+        #expect(current["protocol"] as? String == "0.2.0")
+        let root = try #require(current["root"] as? [String: Any])
+        #expect(root["title"] as? String == "Notes")
+        #expect((root["children"] as? [[String: Any]])?.first?["title"] as? String == "Groceries")
 
         let templates = try await call(descriptor, "resources/templates/list")
         #expect(((templates["result"] as? [String: Any])?["resourceTemplates"] as? [Any])?.isEmpty == true)
@@ -125,5 +130,51 @@ struct PublicInterfaceTests {
         #expect(location["state"] as? String == "visible")
         #expect(location["rects"] as? [[String: Double]] == [["x": 10, "y": 20, "w": 300, "h": 40]])
         server.stop()
+    }
+
+    /// An app with a server of its own: it mounts the responder on one
+    /// path, hands it each request that arrives there, and writes the
+    /// descriptor itself (RFC-0002). No `ContextServer` is involved.
+    @Test
+    func anAppMountsTheResponderOnItsOwnServer() async throws {
+        let app = ContextApp(id: "org.example.notes", name: "Notes", version: "1.0")
+        let token = ContextServer.random(bytes: 32)
+        let instance = ContextServer.random(bytes: 6)
+        let provider = Notes()
+        let responder = try ContextResponder(
+            app: app, instance: instance, token: token, path: "/ambient", check: .refuse,
+            current: { await provider.current() }
+        )
+
+        // What the app's server would pass on for a request to that path.
+        let body = try JSONSerialization.data(withJSONObject: [
+            "jsonrpc": "2.0", "id": 1, "method": "resources/read",
+            "params": ["uri": "ambient://current", "_meta": [
+                "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                "io.modelcontextprotocol/clientCapabilities": [String: Any](),
+            ]],
+        ])
+        var request = ContextHTTPRequest(method: "POST", path: "/ambient", headers: [
+            "authorization": "Bearer \(token)", "mcp-protocol-version": "2026-07-28",
+            "mcp-method": "resources/read", "mcp-name": "ambient://current",
+        ], body: body)
+        let response = await responder.respond(to: request)
+        #expect(response.status == 200)
+        let answer = try #require(try JSONSerialization.jsonObject(with: response.body) as? [String: Any])
+        #expect(try document(answer)["instance"] as? String == instance)
+
+        request.headers["authorization"] = nil
+        #expect(await responder.respond(to: request).status == 401)
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("acp-\(UUID().uuidString)", isDirectory: true)
+        let file = try ContextDescriptor(
+            app: app, instance: instance, endpoint: "http://127.0.0.1:7801/ambient", token: token
+        ).write(to: directory)
+        let written = try JSONDecoder().decode(Descriptor.self, from: Data(contentsOf: file))
+        #expect(written.endpoint == "http://127.0.0.1:7801/ambient")
+        #expect(written.instance == instance)
+        #expect(written.pid == ProcessInfo.processInfo.processIdentifier)
+        try FileManager.default.removeItem(at: directory)
     }
 }

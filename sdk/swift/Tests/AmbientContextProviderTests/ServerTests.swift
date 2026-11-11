@@ -9,22 +9,28 @@ struct ContextServerTests {
 
     private static let token = "test-token"
 
-    private static let selection = ContextItem(
-        id: "sel-23", type: "selection", title: "Selection in draft.md",
+    private static let selection = ContextElement(
+        id: "sel-23", role: .text,
         content: [.text("The command line lasted thirty years.")],
-        parent: "doc-1", locatable: true,
-        payload: ["lines": .object(["start": .integer(3), "end": .integer(3)])]
+        selected: true,
+        attributes: ["lines": .object(["start": .integer(3), "end": .integer(3)])]
     )
-    private static let document = ContextItem(
-        id: "doc-1", type: "document", title: "draft.md", url: "file:///Users/ada/essays/draft.md"
-    )
+    private static let tree = ContextElement(id: "app", role: .application, title: "Editor", children: [
+        ContextElement(id: "win-1", role: .window, focused: true, children: [
+            ContextElement(
+                id: "doc-1", role: .document, subrole: "markdown", title: "draft.md",
+                url: "file:///Users/ada/essays/draft.md", focused: true, children: [selection]
+            ),
+            ContextElement(id: "doc-2", role: .document, subrole: "markdown", title: "notes.md", visible: false),
+        ]),
+    ])
 
     private var responder: ContextResponder {
         ContextResponder(
             app: .init(id: "org.example.editor", name: "Editor", version: "2.3.0"),
             instance: "k3f9x2",
             token: Self.token,
-            current: { ContextCurrent(focus: ["sel-23"], items: [Self.document, Self.selection]) },
+            current: { Self.tree },
             locate: { id in
                 switch id {
                 case "sel-23":
@@ -158,7 +164,7 @@ struct ContextServerTests {
         let capabilities = try #require(result["capabilities"] as? [String: Any])
         #expect(capabilities["resources"] is [String: Any])
         let extensions = try #require(capabilities["extensions"] as? [String: [String: String]])
-        #expect(extensions["org.humanitas/ambient-context"] == ["version": "0.1"])
+        #expect(extensions["org.humanitas/ambient-context"] == ["version": "0.2.0"])
         let meta = try #require(result["_meta"] as? [String: [String: String]])
         #expect(meta["io.modelcontextprotocol/serverInfo"] == ["name": "Editor", "version": "2.3.0"])
     }
@@ -176,26 +182,145 @@ struct ContextServerTests {
     }
 
     @Test
-    func currentReturnsTheAppTheInstanceAndTheItems() async throws {
+    func currentReturnsTheProtocolTheInstanceAndTheTree() async throws {
         let uri = "ambient://current"
         let current = try document(await responder.respond(to: request("resources/read", params: ["uri": uri])), uri: uri)
-        #expect(current["app"] as? [String: String] == ["id": "org.example.editor", "name": "Editor"])
+        // Exactly these three: the app's name is the root's title.
+        #expect(Set(current.keys) == ["protocol", "instance", "root"])
+        #expect(current["protocol"] as? String == "0.2.0")
         #expect(current["instance"] as? String == "k3f9x2")
-        #expect(current["focus"] as? [String] == ["sel-23"])
 
-        let items = try #require(current["items"] as? [[String: Any]])
-        #expect(items.count == 2)
-        #expect(items[0]["id"] as? String == "doc-1")
-        #expect(items[0]["url"] as? String == "file:///Users/ada/essays/draft.md")
-        // Fields an item does not have are left out, not sent as null.
-        #expect(Set(items[0].keys) == ["id", "type", "title", "url"])
+        let root = try #require(current["root"] as? [String: Any])
+        #expect(root["role"] as? String == "Application")
+        #expect(root["title"] as? String == "Editor")
+        // The root is not marked focused, and a state that is false is not sent.
+        #expect(Set(root.keys) == ["id", "role", "title", "children"])
 
-        #expect(items[1]["parent"] as? String == "doc-1")
-        #expect(items[1]["locatable"] as? Bool == true)
-        let content = try #require(items[1]["content"] as? [[String: String]])
+        let window = try #require((root["children"] as? [[String: Any]])?.first)
+        #expect(window["focused"] as? Bool == true)
+        let documents = try #require(window["children"] as? [[String: Any]])
+        #expect(documents.count == 2)
+        #expect(documents[0]["url"] as? String == "file:///Users/ada/essays/draft.md")
+        #expect(Set(documents[0].keys) == ["id", "role", "subrole", "title", "url", "focused", "children"])
+        // `visible` is sent as given; an empty `children` list is not sent.
+        #expect(documents[1]["visible"] as? Bool == false)
+        #expect(Set(documents[1].keys) == ["id", "role", "subrole", "title", "visible"])
+
+        let selection = try #require((documents[0]["children"] as? [[String: Any]])?.first)
+        #expect(selection["role"] as? String == "Text")
+        #expect(selection["selected"] as? Bool == true)
+        #expect(Set(selection.keys) == ["id", "role", "selected", "content", "attributes"])
+        let content = try #require(selection["content"] as? [[String: String]])
         #expect(content == [["type": "text", "text": "The command line lasted thirty years."]])
-        let payload = try #require(items[1]["payload"] as? [String: [String: Int]])
-        #expect(payload == ["lines": ["start": 3, "end": 3]])
+        let attributes = try #require(selection["attributes"] as? [String: [String: Int]])
+        #expect(attributes == ["lines": ["start": 3, "end": 3]])
+    }
+
+    @Test
+    func aHoveredElementIsMarkedAndNothingElseIs() async throws {
+        var responder = responder
+        responder.current = {
+            ContextElement(id: "app", role: .application, children: [
+                ContextElement(id: "v-1", role: .list, subrole: "view", focused: true, children: [
+                    ContextElement(id: "t-104", role: .row, subrole: "task", title: "Launch plan review", hovered: true),
+                    ContextElement(id: "t-105", role: .row, subrole: "task", title: "Book the venue"),
+                ]),
+            ])
+        }
+        let uri = "ambient://current"
+        let current = try document(await responder.respond(to: request("resources/read", params: ["uri": uri])), uri: uri)
+        let list = try #require(((current["root"] as? [String: Any])?["children"] as? [[String: Any]])?.first)
+        let rows = try #require(list["children"] as? [[String: Any]])
+        #expect(rows[0]["hovered"] as? Bool == true)
+        #expect(rows[1]["hovered"] == nil)
+        #expect(list["hovered"] == nil)
+    }
+
+    // MARK: - The tree's rules
+
+    @Test
+    func aTreeThatKeepsTheRulesHasNoIssues() {
+        #expect(ContextTree.check(Self.tree).isEmpty)
+    }
+
+    @Test
+    func theCheckNamesEachBrokenRule() {
+        func messages(_ root: ContextElement) -> [String] { ContextTree.check(root).map(\.message) }
+        let row = ContextElement(id: "r-1", role: .row)
+
+        #expect(messages(ContextElement(id: "w", role: .window)).contains { $0.contains("not 'Application'") })
+        #expect(messages(ContextElement(id: "app", role: .application, children: [row, row]))
+            .contains { $0.contains("more than one element") })
+        #expect(messages(ContextElement(id: "app", role: .application, children: [ContextElement(id: "a/b", role: .row)]))
+            .contains { $0.contains("1 to 128") })
+        #expect(messages(ContextElement(id: "app", role: .application, children: [
+            ContextElement(id: "a2", role: .application),
+        ])).contains { $0.contains("only the root") })
+        // A gap: the row is focused and the list that holds it is not.
+        #expect(messages(ContextElement(id: "app", role: .application, children: [
+            ContextElement(id: "l", role: .list, children: [ContextElement(id: "r", role: .row, focused: true)]),
+        ])).contains { $0.contains("has a gap") })
+        // A fork: two focused siblings.
+        #expect(messages(ContextElement(id: "app", role: .application, children: [
+            ContextElement(id: "a", role: .window, focused: true), ContextElement(id: "b", role: .window, focused: true),
+        ])).contains { $0.contains("forks") })
+        #expect(messages(ContextElement(id: "app", role: .application, children: [
+            ContextElement(id: "a", role: .row, hovered: true), ContextElement(id: "b", role: .row, hovered: true),
+        ])).contains { $0.contains("at most one") })
+    }
+
+    @Test
+    func aBrokenTreeIsReportedOnceAndStillAnswered() async throws {
+        let seen = Issues()
+        let broken = try ContextResponder(
+            app: .init(id: "org.example.editor", name: "Editor", version: "2.3.0"), instance: "k3f9x2",
+            token: Self.token, report: { seen.add($0) },
+            current: { ContextElement(id: "w", role: .window) }
+        )
+        let uri = "ambient://current"
+        _ = try document(await broken.respond(to: request("resources/read", params: ["uri": uri])), uri: uri)
+        _ = try document(await broken.respond(to: request("resources/read", params: ["uri": uri])), uri: uri)
+        #expect(seen.all.count == 1)
+    }
+
+    @Test
+    func underRefuseABrokenTreeIsNotAnswered() async throws {
+        let strict = try ContextResponder(
+            app: .init(id: "org.example.editor", name: "Editor", version: "2.3.0"), instance: "k3f9x2",
+            token: Self.token, check: .refuse, report: { _ in },
+            current: { ContextElement(id: "w", role: .window) }
+        )
+        let response = await strict.respond(to: request("resources/read", params: ["uri": "ambient://current"]))
+        #expect((try json(response)["error"] as? [String: Any])?["code"] as? Int == -32602)
+    }
+
+    // MARK: - A path of the app's choosing
+
+    @Test
+    func aResponderAnswersOnThePathItIsGivenAndNoOther() async throws {
+        let mounted = try ContextResponder(
+            app: .init(id: "org.example.editor", name: "Editor", version: "2.3.0"), instance: "k3f9x2",
+            token: Self.token, path: "/ambient", current: { Self.tree }
+        )
+        var asked = request("resources/list")
+        asked.path = "/ambient"
+        #expect(await mounted.respond(to: asked).status == 200)
+        #expect(await mounted.respond(to: request("resources/list")).status == 404)
+        // The checks come first on that path too.
+        asked.headers["origin"] = "https://example.com"
+        #expect(await mounted.respond(to: asked).status == 403)
+    }
+
+    @Test
+    func aPathMustStartWithASlashAndCarryNoQueryOrFragment() {
+        for path in ["ambient", "/ambient?x=1", "/ambient#top", ""] {
+            #expect(throws: ContextResponder.InvalidPath(path: path)) {
+                try ContextResponder(
+                    app: .init(id: "a", name: "A", version: "1"), instance: "i", token: "t", path: path,
+                    current: { Self.tree }
+                )
+            }
+        }
     }
 
     @Test
@@ -244,7 +369,7 @@ struct ContextServerTests {
     func aProviderWithoutLocateStillAnswersCurrent() async throws {
         let uri = "ambient://current"
         let current = try document(await withoutLocate.respond(to: request("resources/read", params: ["uri": uri])), uri: uri)
-        #expect((current["items"] as? [Any])?.count == 2)
+        #expect((current["root"] as? [String: Any])?["role"] as? String == "Application")
     }
 
     @Test
@@ -374,12 +499,12 @@ struct ContextServerTests {
 
     @Test
     func itemIdsAreLettersDigitsHyphensAndUnderscores() {
-        #expect(ContextResponder.isItemID("sel-23"))
-        #expect(ContextResponder.isItemID("Doc_1"))
-        #expect(!ContextResponder.isItemID(""))
-        #expect(!ContextResponder.isItemID("a/b"))
-        #expect(!ContextResponder.isItemID("sél"))
-        #expect(!ContextResponder.isItemID(String(repeating: "a", count: 129)))
+        #expect(ContextTree.isElementID("sel-23"))
+        #expect(ContextTree.isElementID("Doc_1"))
+        #expect(!ContextTree.isElementID(""))
+        #expect(!ContextTree.isElementID("a/b"))
+        #expect(!ContextTree.isElementID("sél"))
+        #expect(!ContextTree.isElementID(String(repeating: "a", count: 129)))
     }
 
     // MARK: - Older clients
@@ -461,7 +586,7 @@ struct ContextServerTests {
 
     private func descriptor(pid: Int32) -> ContextDescriptor {
         ContextDescriptor(
-            protocol: "0.1", app: .init(id: "org.example.editor", name: "Editor", version: "2.3.0"),
+            protocol: "0.2.0", app: .init(id: "org.example.editor", name: "Editor", version: "2.3.0"),
             pid: pid, instance: "k3f9x2", endpoint: "http://127.0.0.1:53124/mcp", token: "secret",
             started: "2026-11-09T21:14:03Z"
         )
@@ -482,7 +607,7 @@ struct ContextServerTests {
 
         let written = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
         #expect(Set(written.keys) == ["protocol", "app", "pid", "instance", "endpoint", "token", "started"])
-        #expect(written["protocol"] as? String == "0.1")
+        #expect(written["protocol"] as? String == "0.2.0")
         #expect(written["pid"] as? Int == 48211)
         #expect(written["endpoint"] as? String == "http://127.0.0.1:53124/mcp")
         #expect(written["app"] as? [String: String] == ["id": "org.example.editor", "name": "Editor", "version": "2.3.0"])
@@ -528,5 +653,23 @@ struct ContextServerTests {
         #expect(first != second)
         #expect(first.count == 43)
         #expect(first.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") })
+    }
+}
+
+/// Collects what a responder reports, from whichever thread it reports on.
+private final class Issues: @unchecked Sendable {
+    private let lock = NSLock()
+    private var issues: [ContextIssue] = []
+
+    func add(_ issue: ContextIssue) {
+        lock.lock()
+        issues.append(issue)
+        lock.unlock()
+    }
+
+    var all: [ContextIssue] {
+        lock.lock()
+        defer { lock.unlock() }
+        return issues
     }
 }

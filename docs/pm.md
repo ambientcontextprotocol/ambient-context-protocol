@@ -201,7 +201,7 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 | **PR-028** — Version in the descriptor | The descriptor's `protocol` field carries the same version, so a host can decide before connecting. | Provider | P0 | — | 0.1 | — | — |
 | **PR-029** — Unknown fields | Both sides ignore fields they do not recognize. | Both | P0 | — | 0.1 | — | — |
 | **PR-030** — Unsupported version | A host that does not support a provider's version treats the app as if it were not a provider. | Host | P0 | — | 0.1 | — | — |
-| **PR-066** — Declared version, three places | A provider gives the same version, `0.2.0`, in the MCP extension `"org.humanitas/ambient-context": {"version": "0.2.0"}`, in the descriptor and in the `current` answer. Replaces PR-027. | Provider | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
+| **PR-066** — Declared version, three places | A provider gives the same version, `0.2.0`, in the MCP extension `"io.github.ambientcontextprotocol/context": {"version": "0.2.0"}`, in the descriptor and in the `current` answer. Replaces PR-027. | Provider | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
 | **PR-067** — Version agreement | Before 1.0 a host and a provider work together only if they agree on the major and minor parts of the version. A patch version only adds. | Both | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
 | **PR-068** — Unknown role | A receiver treats a role it does not know as `Group`. | Both | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
 

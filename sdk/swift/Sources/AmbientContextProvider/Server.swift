@@ -175,7 +175,7 @@ public struct ContextResponder: Sendable {
     typealias App = ContextApp
 
     public static let protocolVersion = "0.2.0"
-    public static let extensionID = "org.humanitas/ambient-context"
+    public static let extensionID = "io.github.ambientcontextprotocol/context"
     /// The path `ContextServer` listens on, and the default.
     public static let endpointPath = "/mcp"
     static let currentURI = "ambient://current"

@@ -274,7 +274,7 @@ export interface ContextResponderOptions {
  */
 export class ContextResponder {
   static readonly protocolVersion = "0.2.0";
-  static readonly extensionID = "org.humanitas/ambient-context";
+  static readonly extensionID = "io.github.ambientcontextprotocol/context";
   /** The path used when none is given. */
   static readonly endpointPath = "/mcp";
   static readonly currentURI = "ambient://current";

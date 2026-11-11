@@ -34,7 +34,7 @@ The provider lists the extension in its capabilities, which a client gets from `
   "capabilities": {
     "resources": {},
     "extensions": {
-      "org.humanitas/ambient-context": { "version": "0.2.0" }
+      "io.github.ambientcontextprotocol/context": { "version": "0.2.0" }
     }
   },
   "_meta": {

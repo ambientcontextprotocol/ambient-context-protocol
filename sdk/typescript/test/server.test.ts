@@ -191,7 +191,7 @@ test("discoverDeclaresTheExtension", async () => {
   assert.equal(value["resultType"], "complete");
   assert.equal(value["supportedVersions"][0], "2026-07-28");
   assert.deepEqual(value["capabilities"].resources, {});
-  assert.deepEqual(value["capabilities"].extensions["org.humanitas/ambient-context"], { version: "0.2.0" });
+  assert.deepEqual(value["capabilities"].extensions["io.github.ambientcontextprotocol/context"], { version: "0.2.0" });
   assert.deepEqual(value["_meta"]["io.modelcontextprotocol/serverInfo"], { name: "Editor", version: "2.3.0" });
 });
 
@@ -425,7 +425,7 @@ test("theOlderHandshakeIsAnswered", async () => {
   assert.deepEqual(value["serverInfo"], { name: "Editor", version: "2.3.0" });
   assert.equal("resultType" in value, false);
   assert.deepEqual(value["capabilities"].resources, {});
-  assert.deepEqual(value["capabilities"].experimental, { "org.humanitas/ambient-context": { version: "0.2.0" } });
+  assert.deepEqual(value["capabilities"].experimental, { "io.github.ambientcontextprotocol/context": { version: "0.2.0" } });
 
   // A revision this server does not know is answered with one it does.
   const unknown = result(await responder.respond(legacy("initialize", { protocolVersion: "2030-01-01" }, null)));

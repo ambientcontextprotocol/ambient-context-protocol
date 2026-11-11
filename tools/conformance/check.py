@@ -34,7 +34,7 @@ from urllib.parse import urlsplit
 PROTOCOL = "0.2.0"
 MCP_VERSION = "2026-07-28"
 LEGACY_VERSION = "2025-11-25"
-EXTENSION = "org.humanitas/ambient-context"
+EXTENSION = "io.github.ambientcontextprotocol/context"
 CURRENT_URI = "ambient://current"
 LOCATION_TEMPLATE = "ambient://location/{id}"
 LOCATION_PREFIX = "ambient://location/"

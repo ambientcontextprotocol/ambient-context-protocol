@@ -33,7 +33,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 PROTOCOL = "0.2.0"
 MCP_VERSION = "2026-07-28"
 LEGACY_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"]
-EXTENSION = "org.humanitas/ambient-context"
+EXTENSION = "io.github.ambientcontextprotocol/context"
 CURRENT_URI = "ambient://current"
 LOCATION_TEMPLATE = "ambient://location/{id}"
 LOCATION_PREFIX = "ambient://location/"

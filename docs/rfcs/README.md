@@ -20,7 +20,7 @@ When in doubt, ask whether an implementation written before the change would sti
 
 | Step | What happens | Who |
 |---|---|---|
-| 1. Discuss | Open a candidate: an issue that states a need and the evidence for it, with no design. See [section 2.1](#21-candidates). Optional, and recommended before writing | Anyone |
+| 1. Discuss | Open an RFC candidate: an issue that states a need and the evidence for it, with no design. See [section 2.1](#21-rfc-candidates). Optional, and recommended before writing | Anyone |
 | 2. Draft | Copy [the template](0000-template.md) to `docs/rfcs/NNNN-short-title.md`, taking the next unused number in [the index](index.md). Open a pull request that adds the file with status Draft and a row in the index | The author |
 | 3. Review | Discussion happens on the pull request. The author keeps the RFC current, so that the document, not the comment history, states the proposal | Anyone |
 | 4. Decide | A maintainer records the outcome in section 10 of the RFC, sets its status and fills "Decided" with the date. An accepted or provisional RFC is merged. A declined one is merged too, with its reason, so the number and the reasoning are kept | A maintainer |
@@ -28,9 +28,9 @@ When in doubt, ask whether an implementation written before the change would sti
 
 Numbers are four digits, given in order and never reused. Reserving a number means opening the draft pull request.
 
-### 2.1 Candidates
+### 2.1 RFC candidates
 
-A candidate is an issue opened from the "Candidate" form. It records a need, what was observed, who it touches and the questions an RFC would have to answer. It proposes no design, so it can be written the moment a need is seen.
+An RFC candidate, a candidate for short, is an issue opened from the "RFC candidate" form. It records a need, what was observed, who it touches and the questions an RFC would have to answer. It proposes no design, so it can be written the moment a need is seen.
 
 Anyone may write an RFC for a candidate; no acceptance is needed first, and the decision is made on the RFC. A maintainer closes a candidate in one of four ways, and its label says which:
 
@@ -41,7 +41,7 @@ Anyone may write an RFC for a candidate; no acceptance is needed first, and the 
 | `host` | It is a host's own business and not the protocol's. It moves to that host's tracker |
 | `declined` | Not pursued, with the reason |
 
-Until then it carries `candidate`. A bug in a package or in the conformance check is an ordinary issue and needs no form.
+Until then it carries `rfc-candidate`. A bug in a package or in the conformance check is an ordinary issue and needs no form.
 
 ## 3. Statuses
 

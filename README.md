@@ -67,7 +67,7 @@ A running provider announces itself with a descriptor file that only the user ca
 
 | | |
 |---|---|
-| Specification | [Draft 0.1](docs/protocol-v0.md) |
+| Specification | [Draft 0.1](docs/spec/index.md) |
 | First provider | [Paper](https://github.com/humanitas-labs/paper), a Markdown editor for macOS. Planned. |
 | First host | Sirius. Planned. |
 | Platforms | macOS first |
@@ -75,5 +75,5 @@ A running provider announces itself with a descriptor file that only the user ca
 ## In this repository
 
 - [`docs/pm.md`](docs/pm.md): the product model. Domains, Features, Requirements and how each is verified.
-- [`docs/protocol-v0.md`](docs/protocol-v0.md): the protocol, draft 0.1. Operations, items, locations, the MCP binding and discovery.
+- [`docs/spec/`](docs/spec/index.md): the protocol, draft 0.1. Operations, items, locations, the MCP binding and discovery.
 - [`sdk/swift`](sdk/swift/README.md): a Swift package that makes a macOS app a provider. The app says what is open and selected; the package does the rest.

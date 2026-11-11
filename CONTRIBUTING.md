@@ -10,7 +10,7 @@ Status: proposed, with the RFC process it refers to. Three items marked "to be d
 
 | Path | What it is |
 |---|---|
-| `docs/protocol-v0.md` | The specification. The contract between a provider and a host |
+| `docs/spec/` | The specification. The contract between a provider and a host |
 | `docs/pm.md` | The product model: the features and requirements the specification must satisfy |
 | `docs/rfcs/` | Proposals to change the protocol, and the record of what was decided |
 | `sdk/swift`, `sdk/typescript` | Packages that make an app a provider |

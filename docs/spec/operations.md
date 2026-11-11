@@ -1,6 +1,6 @@
 # Ambient Context Protocol · Operations
 
-> Part of the [specification](index.md), version `0.1`.
+> Part of the [specification](index.md), version `0.2.0`.
 
 ## 4. Operations
 
@@ -12,23 +12,28 @@ Both are reads. The host's application code performs them, not the model: the ho
 
 Asks what the user has open and what they are pointing at, right now. Takes no input.
 
-Result:
+Result, an object with exactly these three fields:
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `app` | object | yes | `id` (the app's bundle identifier) and `name`. |
-| `instance` | string | yes | A random value the provider mints each time it starts. It identifies this run of the provider. See [ids and instances](elements.md#5-items). |
-| `items` | array | yes | The [items](elements.md#5-items) currently open or selected. May be empty. |
-| `focus` | array of strings | no | The ids of the most specific items the user is pointing at: the selection if there is one, otherwise the front document or view. More than one when several things are selected together. Absent or empty when nothing has focus. |
+| `protocol` | string | yes | The version of this protocol the answer follows: `"0.2.0"`. The same value as in the descriptor and the extension declaration ([section 10](versioning.md#10-versioning)). |
+| `instance` | string | yes | A random value the provider mints each time it starts. It identifies this run of the provider. See [ids and instances](elements.md#54--ids-and-instances). |
+| `root` | [element](elements.md#5-elements) | yes | The app, as an element with role `Application`. Everything the provider reports is inside it. |
+
+The app's name is the root's `title`. Its bundle identifier is in the descriptor ([section 8](discovery.md#8-discovery)), not in the answer.
+
+What the user is pointing at is not a separate field. It is stated on the elements themselves, as the states `selected`, `focused` and `hovered` ([5.3](elements.md#53--states)).
 
 ### 4.2 — locate
 
-Asks where an item is on screen.
+Asks where an element is on screen.
 
 Input:
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `id` | string | yes | An item id the provider returned earlier. |
+| `id` | string | yes | An element id the provider returned earlier. |
 
-The result is a [location](locations.md#6-locations). An id the provider issued and whose item no longer exists is not an error: the provider answers with `state: "gone"`. An id the provider never issued in this run is an error.
+The result is a [location](locations.md#6-locations). An id the provider issued and whose element no longer exists is not an error: the provider answers with `state: "gone"`. An id the provider never issued in this run is an error.
+
+Whether an element can be located is asked, not declared in advance. A provider that cannot place a particular element answers as it does for an id it never issued, and the host carries on without the placement. A provider that cannot report positions at all does not offer the operation ([7.3](binding.md#73--the-two-resources)).

@@ -18,7 +18,7 @@ Status: proposed, with the RFC process it refers to. Three items marked "to be d
 ## Which path to take
 
 1. *A fix that does not change behavior:* wording, an example, a bug in a package, a test. Open a pull request.
-2. *A change to what a provider or host must do:* write an RFC. The steps are in [the RFC process](docs/rfcs/README.md). An issue or discussion first is welcome and often saves work.
+2. *A change to what a provider or host must do:* write an RFC. The steps are in [the RFC process](docs/rfcs/README.md). A candidate first is welcome and often saves work: an issue that states the need and the evidence, with no design ([candidates](docs/rfcs/README.md#21-candidates)).
 3. *A security problem:* do not open a public issue. See [Security](#security).
 
 If you are unsure which applies, open an issue and ask.

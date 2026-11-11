@@ -73,5 +73,6 @@ A running provider announces itself with a descriptor file that only the user ca
 
 - [`docs/pm.md`](docs/pm.md): the product model. Domains, Features, Requirements and how each is verified.
 - [`docs/spec/`](docs/spec/index.md): the protocol, draft 0.2.0. Operations, elements, locations, the MCP binding and discovery.
+- [`schema/`](schema/current-0.2.0.json): a JSON Schema for the answer to "what is open", and `tools/` with the checks that go with it.
 - [`docs/rfcs/`](docs/rfcs/README.md): how the protocol changes, and the accepted proposals behind 0.2.0.
 - [`sdk/swift`](sdk/swift/README.md): a Swift package that makes a macOS app a provider. The app says what is open and selected; the package does the rest.

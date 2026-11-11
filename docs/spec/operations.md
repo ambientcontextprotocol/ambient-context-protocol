@@ -22,6 +22,8 @@ Result, an object with exactly these three fields:
 
 The app's name is the root's `title`. Its bundle identifier is in the descriptor ([section 8](discovery.md#8-discovery)), not in the answer.
 
+The result's shape is also given as a JSON Schema, [`schema/current-0.2.0.json`](../../schema/current-0.2.0.json). The schema checks what a schema can; unique ids, the focus path and the single hovered element are rules of [section 5](elements.md#5-elements) it cannot state.
+
 What the user is pointing at is not a separate field. It is stated on the elements themselves, as the states `selected`, `focused` and `hovered` ([5.3](elements.md#53--states)).
 
 ### 4.2 — locate

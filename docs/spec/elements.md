@@ -82,6 +82,7 @@ Rules:
 2. A provider's own word goes in `subrole`, never in `role`.
 3. A receiver treats a role it does not know as `Group`. A role added to this list later is therefore not a breaking change.
 4. A provider does not report controls, menus, indicators or window furniture: no buttons, scroll bars or toolbars.
+5. A provider gives a `subrole` to each thing that is the app's own kind: its tasks, comments, panes. A plain window or a plain run of text needs none.
 
 ### 5.3 — States
 

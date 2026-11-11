@@ -1,33 +1,51 @@
 import Foundation
 import Network
 
-// A provider for the Ambient Context Protocol, draft 0.1: a small MCP
-// server on the loopback interface that answers `current` and `locate`
-// as two resources, and the descriptor file that tells a host where it
-// is. It is handed a `ContextProvider` and knows nothing else about the
-// app it runs in. Only `ContextServer`, `ContextApp` and
-// `ContextDescriptor` are public; the layers under them are open to the
-// package's tests.
+// A provider for the Ambient Context Protocol, version 0.2.0: a small
+// MCP server on the loopback interface that answers `current` and
+// `locate` as two resources, and the descriptor file that tells a host
+// where it is. It is handed a `ContextProvider` and knows nothing else
+// about the app it runs in.
 //
 // Three layers, each usable alone: `ContextHTTP` turns bytes into a
 // request, `ContextResponder` turns a request into a response, and
-// `ContextServer` owns the listener and the descriptor.
+// `ContextServer` owns the listener and the descriptor. `ContextServer`
+// is the whole of it for an app with no server of its own. An app that
+// already runs a local server mounts a `ContextResponder` on a path of
+// that server and writes a `ContextDescriptor` itself (RFC-0002).
 
 // MARK: - HTTP
 
-struct ContextHTTPRequest: Equatable, Sendable {
-    var method: String
+/// One HTTP request, as a `ContextResponder` takes it.
+public struct ContextHTTPRequest: Equatable, Sendable {
+    public var method: String
     /// The request target without its query.
-    var path: String
+    public var path: String
     /// Header values by lowercased name.
-    var headers: [String: String] = [:]
-    var body = Data()
+    public var headers: [String: String]
+    public var body: Data
+
+    public init(method: String, path: String, headers: [String: String] = [:], body: Data = Data()) {
+        self.method = method
+        self.path = path
+        self.headers = headers
+        self.body = body
+    }
 }
 
-struct ContextHTTPResponse: Equatable, Sendable {
-    var status: Int
-    var headers: [String: String] = [:]
-    var body = Data()
+/// One HTTP response, as a `ContextResponder` gives it. An app that
+/// mounts the responder on its own server sends `status`, `headers` and
+/// `body` as they are and adds no header of its own to them.
+public struct ContextHTTPResponse: Equatable, Sendable {
+    public var status: Int
+    public var headers: [String: String]
+    public var body: Data
+
+    public init(status: Int, headers: [String: String] = [:], body: Data = Data()) {
+        self.status = status
+        self.headers = headers
+        self.body = body
+    }
 
     /// The response as bytes. Every response closes its connection, so
     /// the server never has to tell one request from the next.
@@ -131,15 +149,35 @@ public struct ContextApp: Equatable, Sendable, Encodable {
     }
 }
 
+/// What a responder does when the provider's tree breaks a rule that can
+/// be told from the tree (`ContextTree.check`).
+public enum ContextCheck: Sendable {
+    /// Reports each distinct issue once and answers anyway. The default.
+    case warn
+    /// Answers with an error when there is an issue, for an app's own
+    /// tests.
+    case refuse
+    /// Does not look.
+    case off
+}
+
 /// Answers one HTTP request as an MCP server offering the protocol's two
-/// resources. Stateless: everything it needs arrives with the request,
-/// and the two closures reach the app.
-struct ContextResponder: Sendable {
+/// resources: one request in, one response out, `Origin` refused and the
+/// token checked before anything else. Everything it needs arrives with
+/// the request, and the two closures reach the app.
+///
+/// `ContextServer` uses it on a listener of its own. An app with a local
+/// server already running hands it every request that arrives on one
+/// path of that server, before any other handling, and sends back what
+/// it returns unchanged. That listener must be bound to `127.0.0.1`
+/// only, and its logs must hold neither the token nor a response body.
+public struct ContextResponder: Sendable {
     typealias App = ContextApp
 
-    static let protocolVersion = "0.1"
-    static let extensionID = "org.humanitas/ambient-context"
-    static let endpointPath = "/mcp"
+    public static let protocolVersion = "0.2.0"
+    public static let extensionID = "org.humanitas/ambient-context"
+    /// The path `ContextServer` listens on, and the default.
+    public static let endpointPath = "/mcp"
     static let currentURI = "ambient://current"
     static let locationPrefix = "ambient://location/"
     static let locationTemplate = "ambient://location/{id}"
@@ -148,6 +186,12 @@ struct ContextResponder: Sendable {
     /// Earlier revisions, which open with `initialize`, served as well.
     static let legacyVersions = ["2025-11-25", "2025-06-18", "2025-03-26"]
 
+    /// A path that does not begin with `/`, or carries a query or a
+    /// fragment.
+    public struct InvalidPath: Error, Equatable {
+        public var path: String
+    }
+
     private static let metaVersion = "io.modelcontextprotocol/protocolVersion"
     private static let metaCapabilities = "io.modelcontextprotocol/clientCapabilities"
     private static let metaServerInfo = "io.modelcontextprotocol/serverInfo"
@@ -155,12 +199,71 @@ struct ContextResponder: Sendable {
     var app: App
     var instance: String
     var token: String
-    var current: @Sendable () async -> ContextCurrent
+    /// The one path this responder answers.
+    var path: String = ContextResponder.endpointPath
+    var check: ContextCheck = .warn
+    var report: @Sendable (ContextIssue) -> Void = ContextResponder.reportToStandardError
+    var current: @Sendable () async -> ContextElement
     /// Nil for a provider that does not report positions: the location
     /// template is then not offered and no location can be read.
     var locate: (@Sendable (String) async -> ContextLocation?)?
+    private let reported = Reported()
 
-    func respond(to request: ContextHTTPRequest) async -> ContextHTTPResponse {
+    init(
+        app: App, instance: String, token: String,
+        current: @escaping @Sendable () async -> ContextElement,
+        locate: (@Sendable (String) async -> ContextLocation?)? = nil
+    ) {
+        self.app = app
+        self.instance = instance
+        self.token = token
+        self.current = current
+        self.locate = locate
+    }
+
+    /// - Parameters:
+    ///   - instance: The value minted for this run, the same one the
+    ///     descriptor carries.
+    ///   - token: Random, made at launch, used for this endpoint only.
+    ///   - path: The path the responder is mounted at. It answers `404`
+    ///     on any other.
+    ///   - report: Where issues go under `warn` and `refuse`. Defaults to
+    ///     one line each on standard error.
+    ///   - current: The tree, rooted at an `application`.
+    ///   - locate: Nil for a provider that does not report positions.
+    public init(
+        app: ContextApp, instance: String, token: String, path: String = ContextResponder.endpointPath,
+        check: ContextCheck = .warn, report: (@Sendable (ContextIssue) -> Void)? = nil,
+        current: @escaping @Sendable () async -> ContextElement,
+        locate: (@Sendable (String) async -> ContextLocation?)? = nil
+    ) throws {
+        guard path.hasPrefix("/"), !path.contains("?"), !path.contains("#") else { throw InvalidPath(path: path) }
+        self.init(app: app, instance: instance, token: token, current: current, locate: locate)
+        self.path = path
+        self.check = check
+        if let report { self.report = report }
+    }
+
+    static let reportToStandardError: @Sendable (ContextIssue) -> Void = { issue in
+        let line = "ambient context: \(issue.severity.rawValue): element '\(issue.element)': \(issue.message)\n"
+        FileHandle.standardError.write(Data(line.utf8))
+    }
+
+    /// The issues already reported, so each is said once.
+    private final class Reported: @unchecked Sendable {
+        private let lock = NSLock()
+        private var keys = Set<String>()
+
+        func isNew(_ issue: ContextIssue) -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            // An app whose ids change every answer would otherwise fill this.
+            if keys.count >= 1000 { keys.removeAll() }
+            return keys.insert("\(issue.severity.rawValue)\u{0}\(issue.element)\u{0}\(issue.message)").inserted
+        }
+    }
+
+    public func respond(to request: ContextHTTPRequest) async -> ContextHTTPResponse {
         // A browser attaches Origin to a page's requests, and no page
         // should be calling this server. Refused before the token is
         // looked at, so a page learns nothing about it.
@@ -171,7 +274,7 @@ struct ContextResponder: Sendable {
               Self.sameBytes(authorization, "Bearer \(token)") else {
             return ContextHTTPResponse(status: 401, headers: ["WWW-Authenticate": "Bearer"])
         }
-        guard request.path == Self.endpointPath else {
+        guard request.path == path else {
             return ContextHTTPResponse(status: 404)
         }
         guard request.method == "POST" else {
@@ -282,8 +385,8 @@ struct ContextResponder: Sendable {
             let templates: [[String: Any]] = locate == nil ? [] : [[
                 "uriTemplate": Self.locationTemplate,
                 "name": "location",
-                "title": "Location of an item",
-                "description": "Where an item from the current context is on screen.",
+                "title": "Location of an element",
+                "description": "Where an element from the current context is on screen.",
                 "mimeType": "application/json",
             ]]
             return Self.success(id: id, legacy: legacy, result: ["resourceTemplates": templates])
@@ -309,38 +412,32 @@ struct ContextResponder: Sendable {
     /// resource.
     private func read(_ uri: String) async -> String? {
         if uri == Self.currentURI {
-            let answer = await current()
-            return Self.json(CurrentResult(
-                app: .init(id: app.id, name: app.name),
-                instance: instance,
-                focus: answer.focus,
-                items: answer.items
-            ))
+            let root = await current()
+            guard inspect(root) else { return nil }
+            return Self.json(CurrentResult(protocol: Self.protocolVersion, instance: instance, root: root))
         }
         guard let locate, uri.hasPrefix(Self.locationPrefix),
               let id = String(uri.dropFirst(Self.locationPrefix.count)).removingPercentEncoding,
-              Self.isItemID(id),
+              ContextTree.isElementID(id),
               let location = await locate(id) else { return nil }
         return Self.json(location)
     }
 
-    private struct CurrentResult: Encodable {
-        struct App: Encodable {
-            var id: String
-            var name: String
-        }
-        var app: App
-        var instance: String
-        var focus: [String]
-        var items: [ContextItem]
+    /// Applies the `check` setting to a provider's answer. False only
+    /// under `refuse`, when the tree has an issue; the read then fails.
+    private func inspect(_ root: ContextElement) -> Bool {
+        if case .off = check { return true }
+        let issues = ContextTree.check(root)
+        for issue in issues where reported.isNew(issue) { report(issue) }
+        if case .refuse = check { return issues.isEmpty }
+        return true
     }
 
-    /// Letters, digits, hyphens and underscores, as the protocol allows.
-    static func isItemID(_ id: String) -> Bool {
-        !id.isEmpty && id.count <= 128 && id.utf8.allSatisfy { byte in
-            (byte >= 0x30 && byte <= 0x39) || (byte >= 0x41 && byte <= 0x5A)
-                || (byte >= 0x61 && byte <= 0x7A) || byte == 0x2D || byte == 0x5F
-        }
+    /// The answer to `current`: exactly these three fields.
+    private struct CurrentResult: Encodable {
+        var `protocol`: String
+        var instance: String
+        var root: ContextElement
     }
 
     /// A header value as the client meant it: MCP carries a value that is
@@ -426,6 +523,24 @@ public struct ContextDescriptor: Equatable, Sendable, Encodable {
     public var token: String
     public var started: String
 
+    /// - Parameters:
+    ///   - endpoint: `http://127.0.0.1:<port><path>`, the path being the
+    ///     one the responder answers.
+    ///   - started: When the provider started, in UTC, ISO 8601.
+    public init(
+        protocol: String = ContextResponder.protocolVersion, app: ContextApp,
+        pid: Int32 = ProcessInfo.processInfo.processIdentifier, instance: String, endpoint: String, token: String,
+        started: String = ISO8601DateFormatter().string(from: Date())
+    ) {
+        self.protocol = `protocol`
+        self.app = app
+        self.pid = pid
+        self.instance = instance
+        self.endpoint = endpoint
+        self.token = token
+        self.started = started
+    }
+
     /// `~/Library/Application Support/AmbientContext/providers`.
     public static var defaultDirectory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -438,8 +553,12 @@ public struct ContextDescriptor: Equatable, Sendable, Encodable {
     }
 
     /// Writes the file where only the user can read it, under a temporary
-    /// name first so a host never reads half of it.
-    func write(to directory: URL) throws -> URL {
+    /// name first so a host never reads half of it. Returns its address,
+    /// which the caller removes when the provider stops. `ContextServer`
+    /// calls it; so does an app that mounts a `ContextResponder` on its
+    /// own listener, once that listener is up.
+    @discardableResult
+    public func write(to directory: URL = ContextDescriptor.defaultDirectory) throws -> URL {
         let files = FileManager.default
         try files.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         try files.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
@@ -579,8 +698,10 @@ public final class ContextServer {
         if wasRunning { ProcessInfo.processInfo.enableSuddenTermination() }
     }
 
-    /// Random bytes as URL-safe text.
-    nonisolated static func random(bytes count: Int) -> String {
+    /// Random bytes as URL-safe text: what `ContextServer` uses for the
+    /// token (32 bytes) and the instance (6). For an app that mounts a
+    /// `ContextResponder` itself and needs both.
+    public nonisolated static func random(bytes count: Int) -> String {
         var generator = SystemRandomNumberGenerator()
         let data = Data((0..<count).map { _ in UInt8.random(in: .min ... .max, using: &generator) })
         return data.base64EncodedString()

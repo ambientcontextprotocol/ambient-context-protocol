@@ -21,3 +21,4 @@ npm-debug.log*
 # extra build folders (NEXT_DIST_DIR) and the Vercel project link
 /.next-*/
 .vercel
+.env*

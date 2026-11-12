@@ -2,6 +2,8 @@
 
 > Part of the [specification](index.md), version `0.2.0`.
 
+**An extension to MCP.** The Ambient Context Protocol is an extension to the Model Context Protocol (MCP), not a protocol of its own. A provider is an ordinary MCP server, the two answers are ordinary MCP resources, and a client that has never heard of the extension can still list and read them. It is called a protocol to give it a short name to refer to.
+
 ## 1. The problem
 
 An ambient agent is one you can call from anywhere on your computer: press a key, ask a question, get an answer without switching apps.

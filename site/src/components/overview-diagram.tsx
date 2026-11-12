@@ -2,25 +2,18 @@ import { name } from '@/lib/name';
 
 type Box = { title: string; detail: string };
 
-// One hue per party: providers sky, the protocol violet, hosts emerald.
+// The protocol is blue; the providers and hosts around it stay neutral.
 type Tone = { box: string; title: string; caption: string };
 
-const providerTone: Tone = {
-  box: 'border-sky-400/30 bg-sky-400/10',
-  title: 'text-sky-200',
-  caption: 'text-sky-300/70',
+const neutral: Tone = {
+  box: 'border-fd-border bg-fd-muted',
+  title: 'text-fd-foreground',
+  caption: 'text-fd-muted-foreground',
 };
 
-const hostTone: Tone = {
-  box: 'border-emerald-400/30 bg-emerald-400/10',
-  title: 'text-emerald-200',
-  caption: 'text-emerald-300/70',
-};
-
-// Tailwind's sky-400, violet-400 and emerald-400, for the arrow gradients.
+// Arrows run from neutral gray into Tailwind's sky-400 and back out.
+const gray = '#71717a';
 const sky = '#38bdf8';
-const violet = '#a78bfa';
-const emerald = '#34d399';
 
 const providers: Box[] = [
   { title: 'Editors', detail: 'Paper, code editors' },
@@ -78,18 +71,18 @@ export function OverviewDiagram() {
   return (
     <figure className="not-prose my-8 rounded-xl border border-fd-border p-4 sm:p-6">
       <div className="grid grid-cols-1 items-center gap-4 md:grid-cols-[minmax(0,1fr)_auto_minmax(12rem,1.1fr)_auto_minmax(0,1fr)]">
-        <Column label="Providers: the apps the user works in. They answer what is open and selected, and where." boxes={providers} tone={providerTone} />
-        <Arrow id="arrow-in" from={sky} to={violet} />
-        <div className="rounded-lg border border-violet-400/50 bg-violet-500/15 px-3 py-6 text-center shadow-[0_0_32px_-8px_rgba(167,139,250,0.35)]">
-          <div className="text-sm font-semibold text-violet-100">{name}</div>
-          <div className="mb-3 text-xs text-violet-300/80">An extension to MCP</div>
-          <div className="flex flex-col gap-1 whitespace-nowrap font-mono text-[11px] text-violet-100/90">
+        <Column label="Providers: the apps the user works in. They answer what is open and selected, and where." boxes={providers} tone={neutral} />
+        <Arrow id="arrow-in" from={gray} to={sky} />
+        <div className="rounded-lg border border-sky-400/50 bg-sky-500/15 px-3 py-6 text-center shadow-[0_0_32px_-8px_rgba(56,189,248,0.35)]">
+          <div className="text-sm font-semibold text-sky-100">{name}</div>
+          <div className="mb-3 text-xs text-sky-300/80">An extension to MCP</div>
+          <div className="flex flex-col gap-1 whitespace-nowrap font-mono text-[11px] text-sky-100/90">
             <span>ambient://current</span>
             <span>ambient://location/{'{id}'}</span>
           </div>
         </div>
-        <Arrow id="arrow-out" from={violet} to={emerald} />
-        <Column label="Hosts: MCP clients. They read when the user asks." boxes={hosts} tone={hostTone} />
+        <Arrow id="arrow-out" from={sky} to={gray} />
+        <Column label="Hosts: MCP clients. They read when the user asks." boxes={hosts} tone={neutral} />
       </div>
     </figure>
   );

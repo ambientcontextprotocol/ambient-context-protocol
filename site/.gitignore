@@ -1,0 +1,23 @@
+# deps
+/node_modules
+
+# generated content
+.source
+# written by scripts/sync-spec.mjs from docs/spec and docs/rfcs
+/content/docs/specification/
+/content/docs/rfcs/
+
+# build
+/.next/
+/out/
+/build
+*.tsbuildinfo
+next-env.d.ts
+
+# misc
+.DS_Store
+npm-debug.log*
+
+# extra build folders (NEXT_DIST_DIR) and the Vercel project link
+/.next-*/
+.vercel

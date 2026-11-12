@@ -1,0 +1,319 @@
+---
+title: Build a provider
+description: An outline of what an app does to become a provider, with the descriptor file and the two resource reads.
+---
+
+A provider is an MCP server inside your app, one file on disk and two resources. This outline shows the order of work and the JSON on the wire. It does not depend on any SDK. The [specification](/specification) has every field.
+
+The examples use a made-up editor, `org.example.editor`, with two Markdown files open and a sentence selected in one.
+
+## What you need
+
+Your app already has most of what a provider reports. It has its windows, its open documents and its selection in memory. It knows where things are drawn in the code that draws and hit-tests its content. The work is exposing that.
+
+A provider has four jobs: listen, write the descriptor, answer `current` and answer `locate`. The last is optional.
+
+<Callout title="Packages">
+The repository has a Swift package (`sdk/swift`) and a TypeScript package for Node and Electron apps (`sdk/typescript`) that do the work on this page. Both are used by local path for now. This page describes the wire protocol, which is what either package implements.
+</Callout>
+
+## Steps
+
+<Steps>
+<Step>
+### Listen on loopback
+
+Listen on `127.0.0.1` only. Either open a listener on a port the system assigns at launch and serve the endpoint at `/mcp`, or add one path, such as `/ambient`, to a local server your app already has. A listener bound to any other address must not carry the endpoint.
+
+Accept MCP's Streamable HTTP transport: each JSON-RPC request is one HTTP `POST` to that path, and you may answer each with a single JSON object. Speak MCP `2026-07-28` and answer four methods: `server/discover`, `resources/list`, `resources/templates/list` and `resources/read`. A provider should also answer `ping` with an empty result, and should answer the older `initialize` handshake so clients that have not moved to `2026-07-28` can connect.
+</Step>
+
+<Step>
+### Refuse browsers, then require the token
+
+Make a random token at launch. Use it for this endpoint only. On every request, check in this order:
+
+1. An `Origin` header is present, on any HTTP method including `OPTIONS`: answer HTTP `403` with no body.
+2. No `Authorization: Bearer <token>` header, or the wrong token: answer HTTP `401`.
+
+On a shared listener, run both checks on that path before any other handling, including middleware that adds headers or answers preflights. No response from the path carries an `Access-Control-Allow-*` header. Do not write the token, or anything from an answer, to a log.
+</Step>
+
+<Step>
+### Declare the extension
+
+List the protocol under `capabilities.extensions` in your `server/discover` result, so a client can tell your server is a provider:
+
+```json title="server/discover result"
+{
+  "resultType": "complete",
+  "supportedVersions": ["2026-07-28"],
+  "capabilities": {
+    "resources": {},
+    "extensions": {
+      "io.github.ambientcontextprotocol/context": { "version": "0.2.0" }
+    }
+  },
+  "_meta": {
+    "io.modelcontextprotocol/serverInfo": { "name": "Editor", "version": "2.3.0" }
+  }
+}
+```
+
+To clients that use the `initialize` handshake, declare it under `capabilities.experimental` instead, with the same identifier and settings object.
+</Step>
+
+<Step>
+### List the two resources
+
+`resources/list` returns `ambient://current`. `resources/templates/list` returns the template `ambient://location/{id}`. A provider that cannot report positions leaves the template out; its context still reaches the agent.
+
+```json title="resources/list result"
+{
+  "resultType": "complete",
+  "resources": [
+    {
+      "uri": "ambient://current",
+      "name": "current",
+      "title": "Current context",
+      "description": "What the user has open and selected in this app, right now.",
+      "mimeType": "application/json"
+    }
+  ]
+}
+```
+
+```json title="resources/templates/list result"
+{
+  "resultType": "complete",
+  "resourceTemplates": [
+    {
+      "uriTemplate": "ambient://location/{id}",
+      "name": "location",
+      "title": "Location of an element",
+      "description": "Where an element from the current context is on screen.",
+      "mimeType": "application/json"
+    }
+  ]
+}
+```
+</Step>
+
+<Step>
+### Write the descriptor file
+
+After the listener is up, write one file into the providers folder, named `<bundle-id>.<pid>.json`. Write it to a temporary name in the same folder and rename it into place, so a host never reads half a file. Remove it when the app quits, and at launch remove any descriptor left by an earlier run that did not exit cleanly.
+
+```json title="~/Library/Application Support/AmbientContext/providers/org.example.editor.48211.json"
+{
+  "protocol": "0.2.0",
+  "app": { "id": "org.example.editor", "name": "Editor", "version": "2.3.0" },
+  "pid": 48211,
+  "instance": "k3f9x2",
+  "endpoint": "http://127.0.0.1:53124/mcp",
+  "token": "q7Jm…",
+  "started": "2026-11-09T21:14:03Z"
+}
+```
+
+Create the folder with permissions `0700` and the file with permissions `0600`. `instance` is a random value you mint at each launch, and `endpoint` carries the path you chose. A host uses that path as given.
+</Step>
+
+<Step>
+### Let the user turn it off
+
+When the user has turned the provider off, write no descriptor and open no listener.
+</Step>
+
+<Step>
+### Test it with a client that is not a host
+
+Any MCP client given only `endpoint` and `token` should be able to list both resources and read them. A client that has never heard of the protocol sees an ordinary server with two resources.
+</Step>
+</Steps>
+
+## Answer `current`
+
+The host asks what is open and what the user is pointing at. The request is a standard MCP `resources/read`; the headers and `_meta` fields come from the MCP `2026-07-28` HTTP transport.
+
+<Tabs items={['HTTP', 'curl']} groupId="wire" persist>
+<Tab value="HTTP">
+
+```http
+POST /mcp HTTP/1.1
+Host: 127.0.0.1:53124
+Authorization: Bearer q7Jm…
+Content-Type: application/json
+Accept: application/json, text/event-stream
+MCP-Protocol-Version: 2026-07-28
+Mcp-Method: resources/read
+Mcp-Name: ambient://current
+
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "method": "resources/read",
+  "params": {
+    "uri": "ambient://current",
+    "_meta": {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientCapabilities": {}
+    }
+  }
+}
+```
+
+</Tab>
+<Tab value="curl">
+
+```sh
+curl -s http://127.0.0.1:53124/mcp \
+  -H 'Authorization: Bearer q7Jm…' \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'MCP-Protocol-Version: 2026-07-28' \
+  -H 'Mcp-Method: resources/read' \
+  -H 'Mcp-Name: ambient://current' \
+  -d '{"jsonrpc":"2.0","id":7,"method":"resources/read","params":{"uri":"ambient://current","_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}'
+```
+
+</Tab>
+</Tabs>
+
+The result's `contents` array holds exactly one entry: the `uri` that was read, `mimeType` `application/json`, and `text` holding the answer as a JSON document.
+
+```json title="Response"
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "result": {
+    "resultType": "complete",
+    "contents": [
+      {
+        "uri": "ambient://current",
+        "mimeType": "application/json",
+        "text": "{ \"protocol\": …, \"instance\": …, \"root\": … }"
+      }
+    ]
+  }
+}
+```
+
+Decoded, the text is one tree of elements rooted at the app:
+
+```json title="The text, decoded"
+{
+  "protocol": "0.2.0",
+  "instance": "k3f9x2",
+  "root": {
+    "id": "app", "role": "Application", "title": "Editor",
+    "children": [
+      { "id": "win-1", "role": "Window", "focused": true, "children": [
+        { "id": "doc-1", "role": "Document", "subrole": "markdown", "title": "draft.md",
+          "url": "file:///Users/ada/essays/draft.md", "focused": true, "children": [
+            { "id": "sel-23", "role": "Text", "selected": true,
+              "content": [
+                { "type": "text", "text": "The command line lasted thirty years as the main way people used computers." }
+              ],
+              "attributes": { "lines": [31, 31] } }
+        ] },
+        { "id": "doc-2", "role": "Document", "subrole": "markdown", "title": "notes.md",
+          "url": "file:///Users/ada/essays/notes.md", "visible": false }
+      ] }
+    ]
+  }
+}
+```
+
+Build the tree of what is open, mint an id for each element, and mark what is selected, focused and, if your app tracks the pointer, hovered. `protocol` and `instance` are the same values as in the descriptor. [Concepts](/docs/concepts) explains roles and states, and the answer's shape is also published as a JSON Schema, `schema/current-0.2.0.json` in the repository.
+
+Answer from state you already hold in memory, without waiting on disk or network. A host sets its own time limit and carries on without context if you miss it.
+
+## Answer `locate`
+
+The host asks where an element is by reading `ambient://location/{id}` with the element's id in place of `{id}`. Only the address in the body and in the `Mcp-Name` header changes.
+
+<Tabs items={['HTTP', 'curl']} groupId="wire" persist>
+<Tab value="HTTP">
+
+```http
+POST /mcp HTTP/1.1
+Host: 127.0.0.1:53124
+Authorization: Bearer q7Jm…
+Content-Type: application/json
+Accept: application/json, text/event-stream
+MCP-Protocol-Version: 2026-07-28
+Mcp-Method: resources/read
+Mcp-Name: ambient://location/sel-23
+
+{
+  "jsonrpc": "2.0",
+  "id": 8,
+  "method": "resources/read",
+  "params": {
+    "uri": "ambient://location/sel-23",
+    "_meta": {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientCapabilities": {}
+    }
+  }
+}
+```
+
+</Tab>
+<Tab value="curl">
+
+```sh
+curl -s http://127.0.0.1:53124/mcp \
+  -H 'Authorization: Bearer q7Jm…' \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'MCP-Protocol-Version: 2026-07-28' \
+  -H 'Mcp-Method: resources/read' \
+  -H 'Mcp-Name: ambient://location/sel-23' \
+  -d '{"jsonrpc":"2.0","id":8,"method":"resources/read","params":{"uri":"ambient://location/sel-23","_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}'
+```
+
+</Tab>
+</Tabs>
+
+The response has the same shape as before, with the location as its `text`:
+
+```json title="The text, decoded"
+{
+  "id": "sel-23",
+  "state": "visible",
+  "rects": [{ "x": 425, "y": 233, "w": 480, "h": 20 }],
+  "window": 9120,
+  "avoid": { "x": 400, "y": 80, "w": 620, "h": 900 },
+  "edge": "right"
+}
+```
+
+Rectangles are in global display coordinates, in points, with the origin at the top-left corner of the primary display and y increasing downward. AppKit's own coordinates have a bottom-left origin and must be converted.
+
+An id you issued whose element no longer exists is not an error: answer with `state: "gone"`. An id you never issued in this run, or an element you cannot place, is JSON-RPC error `-32602`.
+
+## Errors and refusals
+
+| Case | Response |
+|---|---|
+| An `Origin` header is present | HTTP `403`, with no body. Checked first |
+| No `Authorization` header, or the wrong token | HTTP `401` |
+| An HTTP method other than `POST` | HTTP `405` |
+| A request body larger than you accept | HTTP `413`. The limit is your choice |
+| A body that is not JSON, or not a JSON-RPC request | HTTP `400` with JSON-RPC error `-32700` or `-32600` |
+| A request that names MCP `2026-07-28` and lacks `protocolVersion` or `clientCapabilities` in `_meta` | HTTP `400` with JSON-RPC error `-32602` |
+| `MCP-Protocol-Version`, `Mcp-Method` or `Mcp-Name` missing, or disagreeing with the body | HTTP `400` with error `-32020` |
+| A method you do not implement | HTTP `404` with JSON-RPC error `-32601` |
+| An MCP version you do not support | HTTP `400` with error `-32022` |
+
+A request with no MCP version in its body, and either no `MCP-Protocol-Version` header or one naming an older revision, comes from an older client. Treat it as one and do not refuse it. Supporting older clients is more than one extra method: requests, results and errors differ between the revisions. The [binding reference](/specification/binding) has the details.
+
+## An optional tool
+
+An agent connected straight to a provider, with no host between them, cannot read a resource on its own initiative in every MCP client. A provider may therefore also offer one tool, `context_current`, which takes no arguments and returns the `current` result as structured content, with the same JSON as a text block. A host never uses it, and a provider is complete without it.
+
+<Callout title="Open">
+Limits on the size of a tree, its depth and an element's content are not yet set. The extension identifier, the `ambient` address scheme and the descriptor folder may still be renamed. The descriptor folder and the coordinate space are defined for macOS only.
+</Callout>

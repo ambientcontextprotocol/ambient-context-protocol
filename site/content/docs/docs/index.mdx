@@ -1,0 +1,85 @@
+---
+title: Introduction
+description: How a desktop app tells an agent host what the user has open, what is selected, and where it is on screen.
+---
+
+import { Laptop, MessageSquare, Bot, BookOpen, Hammer, FileText } from 'lucide-react';
+
+The <ProtocolName /> lets a desktop app tell an agent host what the user has open, what they have selected, and where a given element is on screen. An app answers two questions. The host asks them when the user calls on it.
+
+This is draft `0.2.0`. It is not stable: any name may change, and the draft is specified for macOS.
+
+## The problem
+
+An ambient agent is one the user can call from anywhere on the computer: press a key, ask a question, get an answer without switching apps. The question is usually about what is in front of them. "Is this claim true?" "Why is this failing?" The agent cannot answer until it knows what "this" refers to, and today that takes a screenshot, a paste or a paragraph of explanation.
+
+The app in front already knows. It knows which windows and documents are open, where the cursor is and what is selected. It also knows where each of those things is on screen, which matters when the host wants to show its answer next to the passage and not in a corner of the display.
+
+## How it works
+
+Three parties are involved. Two of them take part in the protocol.
+
+<Cards>
+  <Card title="Provider" icon={<Laptop />}>
+    The app the user is working in. It is an MCP server on the local machine and answers questions about itself.
+  </Card>
+  <Card title="Host" icon={<MessageSquare />}>
+    The agent's own app, an MCP client. It finds the front app's provider, reads its context, shows the user what it collected and draws its own interface.
+  </Card>
+  <Card title="Agent" icon={<Bot />}>
+    The model behind the host. It is not a party to the protocol and sees only what the host passes on.
+  </Card>
+</Cards>
+
+A provider offers two operations. Both are reads, and each is an ordinary MCP resource that the host reads with `resources/read`:
+
+| Operation | Resource | Question it answers |
+|---|---|---|
+| `current` | `ambient://current` | What does the user have open, and what are they pointing at? |
+| `locate` | `ambient://location/{id}` | Where on screen is the element with this id? |
+
+The answer to `current` is one tree of elements rooted at the app: its windows, the documents in them, and what is selected, focused or under the pointer.
+
+A typical exchange:
+
+<Steps>
+<Step>
+A running provider announces itself with a descriptor file in a known per-user folder. The file holds the provider's local endpoint and a bearer token.
+</Step>
+<Step>
+The user invokes the host. The host finds the descriptor for the app in front and checks the endpoint it names.
+</Step>
+<Step>
+The host reads `ambient://current` with the token. The provider answers with the tree of elements. If anything fails, the host carries on without context.
+</Step>
+<Step>
+The host shows the user what it collected, lets them remove it, and passes the rest to the agent with the question.
+</Step>
+<Step>
+The agent names an element by id, such as `sel-23`. To show something beside it, the host reads `ambient://location/sel-23` from the same provider and gets back the element's rectangles on screen.
+</Step>
+</Steps>
+
+The provider never learns what the host drew, and the agent never sees a coordinate. The agent never calls the provider; the host does.
+
+## Principles
+
+- **The app says where; the host decides what.** A provider reports elements and their positions. It never names what the host draws there.
+- **A shared language for how a thing is shown, the app's own word for what it is.** Every element has a `role` from a fixed list of thirteen, such as `Window`, `List`, `Row` or `Text`, which a program can write rules against. What the thing is to the app, such as a task or a comment, goes in `subrole` and `attributes`, which the app defines freely.
+- **Pulled on the user's action.** A host asks for context when the user does something that calls for it. A provider does not push, and a host does not poll. This is provisional in `0.2.0`.
+- **It is ordinary MCP.** A provider is an MCP server and the two answers are MCP resources. A client that has never heard of the protocol can still list and read them.
+
+## Who it is for
+
+- **App developers** who want an agent to understand what their users are pointing at, without building a separate integration for each host.
+- **Agent host developers** who want context and on-screen positions from the apps their users work in, without screenshots or accessibility scraping.
+
+The first provider is Paper, a Markdown editor for macOS. The first host is Sirius, an agent host. Both are planned, and neither has shipped this version.
+
+## Start here
+
+<Cards>
+  <Card icon={<BookOpen />} title="Concepts" href="/docs/concepts" description="Elements, roles and states, ids, locations, discovery, security and what a host must do." />
+  <Card icon={<Hammer />} title="Build a provider" href="/docs/build-provider" description="The server, the descriptor file and the two resource reads, with example JSON." />
+  <Card icon={<FileText />} title="Specification" href="/specification" description="The draft 0.2.0 reference for every shape and rule." />
+</Cards>

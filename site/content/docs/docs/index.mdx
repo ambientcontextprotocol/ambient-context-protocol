@@ -3,19 +3,35 @@ title: Introduction
 description: How a desktop app tells an agent host what the user has open, what is selected, and where it is on screen.
 ---
 
-import { Laptop, MessageSquare, Bot, BookOpen, Hammer, FileText } from 'lucide-react';
+import { Laptop, MessageSquare, Bot, BookOpen, Hammer, FileText, ShieldCheck, ScrollText } from 'lucide-react';
+import { OverviewDiagram } from '@/components/overview-diagram';
 
-The <ProtocolName /> lets a desktop app tell an agent host what the user has open, what they have selected, and where a given element is on screen. An app answers two questions. The host asks them when the user calls on it.
+The <ProtocolName /> is an extension to the Model Context Protocol (MCP) that lets a desktop app tell an AI assistant what the user is looking at.
 
-**An extension to MCP.** The <ProtocolName /> is an extension to the Model Context Protocol (MCP), not a protocol of its own. A provider is an ordinary MCP server, the two answers are ordinary MCP resources, and a client that has never heard of the extension can still list and read them. It is called a protocol to give it a short name to refer to.
+With it, an assistant you call from anywhere on your computer can ask the app in front which documents are open, what is selected and where each of those things is on screen. "This" in "is this claim true?" then names a specific passage, and the answer can appear beside it.
 
-This is draft `0.2.0`. It is not stable: any name may change.
+Today an assistant learns what is in front of you from a screenshot, a paste or a paragraph of explanation. The protocol replaces that with the app's own account: structured, exact, and with ids the assistant can point back at.
 
-## The problem
+It is not a protocol of its own. A provider is an ordinary MCP server, its two answers are ordinary MCP resources, and a client that has never heard of the extension can still list and read them. It is called a protocol to give it a short name to refer to. This is draft `0.2.0`, and any name may change.
 
-An ambient agent is one the user can call from anywhere on the computer: press a key, ask a question, get an answer without switching apps. The question is usually about what is in front of them. "Is this claim true?" "Why is this failing?" The agent cannot answer until it knows what "this" refers to, and today that takes a screenshot, a paste or a paragraph of explanation.
+<OverviewDiagram />
 
-The app in front already knows. It knows which windows and documents are open, where the cursor is and what is selected. It also knows where each of those things is on screen, which matters when the host wants to show its answer next to the passage and not in a corner of the display.
+## What can it enable?
+
+- Select a sentence in a Markdown editor and ask "is this claim true?" The assistant knows which sentence, in which file, and shows its answer beside it.
+- Select a frame in a design tool and ask "does this match our spacing rules?" The assistant receives a thumbnail and a link to the frame, not a screenshot of the whole window.
+- With a task open in a task manager, ask "what is blocking this?" The assistant knows which task, inside which list.
+- Point at a chart and ask "what am I looking at?" The app reports what is under the pointer, and the assistant treats it as a weaker hint than a selection.
+
+## Why does it matter?
+
+Depending on where you sit, the protocol does different things for you.
+
+- **App developers:** one small MCP server makes your app understood by every assistant that speaks the protocol, without a separate integration for each.
+- **Assistant developers:** you get exact context and on-screen positions from the apps your users work in, without screenshots or accessibility scraping.
+- **Users:** you can ask about what is in front of you without explaining it first, and you see what is sent before it goes. Nothing is read until you call on the assistant.
+
+The first provider is Paper, a Markdown editor. The first host is Sirius, an assistant. Both are planned, and neither has shipped this version.
 
 ## How it works
 
@@ -71,17 +87,18 @@ The provider never learns what the host drew, and the agent never sees a coordin
 - **Pulled on the user's action.** A host asks for context when the user does something that calls for it. A provider does not push, and a host does not poll. This is provisional in `0.2.0`.
 - **It is ordinary MCP.** A provider is an MCP server and the two answers are MCP resources. A client that has never heard of the protocol can still list and read them.
 
-## Who it is for
-
-- **App developers** who want an agent to understand what their users are pointing at, without building a separate integration for each host.
-- **Agent host developers** who want context and on-screen positions from the apps their users work in, without screenshots or accessibility scraping.
-
-The first provider is Paper, a Markdown editor for macOS. The first host is Sirius, an agent host. Both are planned, and neither has shipped this version.
-
-## Start here
+## Start building
 
 <Cards>
-  <Card icon={<BookOpen />} title="Concepts" href="/docs/concepts" description="Elements, roles and states, ids, locations, discovery, security and what a host must do." />
-  <Card icon={<Hammer />} title="Build a provider" href="/docs/build-provider" description="The server, the descriptor file and the two resource reads, with example JSON." />
+  <Card icon={<Hammer />} title="Build a provider" href="/docs/build-provider" description="Make your app answer: the server, the descriptor file and the two resource reads." />
+  <Card icon={<MessageSquare />} title="Build a host" href="/docs/concepts#what-a-host-must-do" description="Find the front app's provider, read its context and follow the host rules." />
+</Cards>
+
+## Learn more
+
+<Cards>
+  <Card icon={<BookOpen />} title="Concepts" href="/docs/concepts" description="Elements, roles and states, ids, locations and discovery." />
+  <Card icon={<ShieldCheck />} title="Security" href="/docs/concepts#security" description="What the token and the checks defend against, and what they do not." />
   <Card icon={<FileText />} title="Specification" href="/specification" description="The draft 0.2.0 reference for every shape and rule." />
+  <Card icon={<ScrollText />} title="RFCs" href="/rfcs" description="How the protocol changes, and the proposals behind 0.2.0." />
 </Cards>

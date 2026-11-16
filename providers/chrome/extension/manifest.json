@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Ambient Context",
+  "version": "0.1.0",
+  "description": "Lets an assistant on this Mac see the page in front and the text selected on it, when you ask it something.",
+  "minimum_chrome_version": "116",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAhv/QdQQXbKdZmLlZG2CzTvpVJpOMr2Z2Yndd0JvS1TftuCDSRNRgzGoYyJ0Q325mB3Uk7wRbo+S+RB1jfPd17OTMsw004DcrVeGrPopnQcF7u8A1adANtg0uNLi61LuCP4Z3j10kZYTuxkIBR1Y8AAs4bcunrSb+qkBZxJoNFjuUreTXz8SRZup3+bLSRcpJkgy3uz8S/tnaCUodiiEtpoxaaD6AYWevY0Ekemss1AYno7YGT8tJ/F/9Sq6YWr/HCL/dkH48OnUGMln4aOAaaHf+tq6uNJRnd5dgu++3KriMkJLKPm8tXf06gRmsypUrKm0a6wwsL6VpjndGkCRQ6QIDAQAB",
+  "permissions": ["nativeMessaging", "scripting", "tabs", "alarms"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" }
+}

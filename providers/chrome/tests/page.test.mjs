@@ -17,7 +17,7 @@ const FIXTURE = `<!doctype html>
 <html><head><meta charset="utf-8"><base href="https://site.example/"><title>Fixture</title>
 <style>body{margin:0;font:16px/1.4 sans-serif} header{height:40px} .far{margin-top:4000px} .gone{display:none}</style></head>
 <body>
-<header><nav><a href="/issues">Issues</a> <a href="/about">About</a></nav></header>
+<header><nav><a href="/issues">Issues</a> <a href="/about">About</a> <span>Menu words</span></nav></header>
 <main><article>
 <h1>The seven vices</h1>
 <p>First paragraph in view, with a <a href="https://example.org/source">source link</a>.</p>
@@ -27,6 +27,10 @@ const FIXTURE = `<!doctype html>
   <figcaption>A gin palace in London</figcaption>
 </figure>
 <img src="https://example.invalid/icon.png" alt="tiny icon" width="16" height="16">
+<a href="/photo" aria-label="Opens profile photo"><div style="width:120px;height:120px;background:#ccc"><img src="https://example.invalid/avatar.jpg" alt="" width="120" height="120" style="opacity:0"></div></a>
+<div><span style="margin-right:12px">San Francisco, CA</span><span style="margin-right:12px">murraycole.com</span><span>Born January 1</span></div>
+<div><span><b>bold</b>ly joined</span> <span style="opacity:0">unseen words</span></div>
+<aside><p>You might like these.</p></aside>
 <h2>Second heading</h2>
 <p>Second paragraph in view.</p>
 <form><input type="text" value="typed secret"><textarea>typed draft</textarea><button>Send it</button></form>
@@ -55,7 +59,7 @@ test("the page reader, in a real page", { skip: !existsSync(CHROME) && "Chrome i
       CHROME,
       [
         "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-        `--user-data-dir=${join(folder, "profile")}`, "--window-size=1000,700", "--virtual-time-budget=3000",
+        `--user-data-dir=${join(folder, "profile")}`, "--window-size=1000,1400", "--virtual-time-budget=3000",
         "--dump-dom", pathToFileURL(page).href,
       ],
       { encoding: "utf8", timeout: 60000, stdio: ["ignore", "pipe", "ignore"] },
@@ -73,7 +77,16 @@ test("the page reader, in a real page", { skip: !existsSync(CHROME) && "Chrome i
     assert.match(first.text, /kept {3}as\ntyped/);
     assert.doesNotMatch(first.text, /Hidden paragraph/);
     assert.doesNotMatch(first.text, /Far below/);
-    assert.doesNotMatch(first.text, /typed secret|typed draft|Send it/);
+    assert.doesNotMatch(first.text, /typed secret|typed draft/);
+    // A button's label is on the screen like any other words.
+    assert.match(first.text, /Send it/);
+    // The site's own parts are left out when the page marks its content.
+    assert.doesNotMatch(first.text, /Menu words|You might like/);
+    // Pieces the page runs together but draws apart get a space; pieces
+    // it draws together stay together; clear text is not read.
+    assert.match(first.text, /San Francisco, CA murraycole\.com Born January 1/);
+    assert.match(first.text, /boldly joined/);
+    assert.doesNotMatch(first.text, /unseen words/);
     // Blocks are on lines of their own.
     assert.match(first.text, /The seven vices\nFirst paragraph/);
     assert.equal(first.textCut, undefined);
@@ -81,12 +94,15 @@ test("the page reader, in a real page", { skip: !existsSync(CHROME) && "Chrome i
     const kinds = (kind) => first.elements.filter((element) => element.kind === kind);
     assert.deepEqual(kinds("heading").map((h) => [h.title, h.level]), [["The seven vices", 1], ["Second heading", 2]]);
     // The caption names the image; the icon is left out.
+    // A clear image over a drawn background is still the picture, named
+    // by the link around it.
     assert.deepEqual(kinds("image").map((i) => [i.title, i.url]), [
       ["A gin palace in London", "https://example.invalid/gin-palace.jpg"],
+      ["Opens profile photo", "https://example.invalid/avatar.jpg"],
     ]);
     // The page's own link, then the header's; none from below the window.
     const links = kinds("link");
-    assert.equal(links.length, 3);
+    assert.equal(links.length, 4);
     assert.ok(links.some((l) => l.title === "source link" && l.url === "https://example.org/source"));
     assert.ok(links.every((l) => !/below/.test(l.url)));
     // In the page's order: the header's links come first there.

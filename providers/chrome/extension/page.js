@@ -39,18 +39,22 @@ export function readPage(options) {
   // Whether an element is drawn inside the window. Asked of the same
   // element many times, so the answer is kept.
   const seen = new Map();
-  function inView(element) {
-    let answer = seen.get(element);
-    if (answer !== undefined) return answer;
+  function look(element) {
+    let found = seen.get(element);
+    if (found) return found;
     const box = element.getBoundingClientRect();
-    answer =
+    let shown =
       box.width >= 1 && box.height >= 1 && box.bottom > 0 && box.top < height && box.right > 0 && box.left < width;
-    if (answer && element.checkVisibility) {
-      answer = element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
-    }
-    seen.set(element, answer);
-    return answer;
+    // Not opacity: a picture drawn as a background often has a clear
+    // image laid over it to carry its address and alt text.
+    if (shown && element.checkVisibility) shown = element.checkVisibility({ checkVisibilityCSS: true });
+    found = { shown, box };
+    seen.set(element, found);
+    return found;
   }
+  const inView = (element) => look(element).shown;
+  // Text that is there but cannot be seen is not what the user sees.
+  const clear = (element) => element.checkVisibility && !element.checkVisibility({ checkOpacity: true });
 
   const oneLine = (text) => (text || "").replace(/\s+/g, " ").trim().slice(0, limits.title);
   const address = (value) => {
@@ -79,41 +83,72 @@ export function readPage(options) {
     return n;
   }
 
+  // The parts of a page that are the site's and not the page's: its
+  // menus, sidebars and footer. Left out of the text when the page marks
+  // its main content, so that an article is not crowded out by them.
+  const FURNITURE =
+    "nav,aside,footer,[role='navigation'],[role='banner'],[role='contentinfo'],[role='complementary'],[role='search']";
+  const main = [...document.querySelectorAll("main,[role='main']")].find(inView);
+
   // The text in view, in reading order: every piece of text whose
   // element is drawn inside the window, a new line where the block it
-  // sits in changes.
-  const SKIP = "script,style,noscript,template,textarea,select,option,button,svg,[aria-hidden='true']";
+  // sits in changes, and a space where two pieces sit apart on the
+  // screen with nothing between them in the page.
+  const SKIP = "script,style,noscript,template,textarea,select,option,svg,[aria-hidden='true']";
   const BLOCK =
     "p,div,li,h1,h2,h3,h4,h5,h6,blockquote,pre,figcaption,td,th,dt,dd,section,article,header,footer,nav,aside,main,figure,ul,ol,table,tr,form";
-  const pieces = [];
-  let length = 0;
-  let lastBlock = null;
-  let cut = false;
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-  let scanned = 0;
-  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-    scanned += 1;
-    if (scanned > limits.nodes || (scanned % 200 === 0 && late())) {
-      cut = true;
-      break;
+  function visibleText(root, skipFurniture) {
+    const pieces = [];
+    let length = 0;
+    let lastBlock = null;
+    let lastParent = null;
+    let lastWords = "";
+    let cut = false;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let scanned = 0;
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      scanned += 1;
+      if (scanned > limits.nodes || (scanned % 200 === 0 && late())) {
+        cut = true;
+        break;
+      }
+      const parent = node.parentElement;
+      if (!parent || !/\S/.test(node.data) || parent.closest(SKIP) || !inView(parent) || clear(parent)) continue;
+      if (skipFurniture && parent.closest(FURNITURE)) continue;
+      const block = parent.closest(BLOCK);
+      const words = parent.closest("pre") ? node.data : node.data.replace(/\s+/g, " ");
+      let joint = "";
+      if (pieces.length) {
+        if (block !== lastBlock) {
+          joint = "\n";
+        } else if (parent !== lastParent && !/\s$/.test(lastWords) && !/^\s/.test(words)) {
+          // Two pieces the page runs together but draws apart: on
+          // different lines, or with a gap between them.
+          const before = look(lastParent).box;
+          const after = look(parent).box;
+          const nested = lastParent.contains(parent) || parent.contains(lastParent);
+          if (!nested && (after.top >= before.bottom - 1 || after.left - before.right >= 3)) joint = " ";
+        }
+      }
+      const piece = joint + words;
+      if (length + piece.length > limits.text) {
+        pieces.push(piece.slice(0, limits.text - length));
+        cut = true;
+        break;
+      }
+      pieces.push(piece);
+      length += piece.length;
+      lastBlock = block;
+      lastParent = parent;
+      lastWords = words;
     }
-    const parent = node.parentElement;
-    if (!parent || !/\S/.test(node.data) || parent.closest(SKIP) || !inView(parent)) continue;
-    const block = parent.closest(BLOCK);
-    const words = parent.closest("pre") ? node.data : node.data.replace(/\s+/g, " ");
-    const piece = (block !== lastBlock && pieces.length ? "\n" : "") + words;
-    if (length + piece.length > limits.text) {
-      pieces.push(piece.slice(0, limits.text - length));
-      cut = true;
-      break;
-    }
-    pieces.push(piece);
-    length += piece.length;
-    lastBlock = block;
+    return { text: pieces.join("").replace(/ *\n */g, "\n").trim(), cut };
   }
-  const text = pieces.join("").replace(/ *\n */g, "\n").trim();
-  if (text) result.text = text;
-  if (cut) result.textCut = true;
+  let read = main ? visibleText(main, true) : visibleText(document.body, false);
+  // A page whose marked content holds next to nothing is read whole.
+  if (main && read.text.length < 80) read = visibleText(document.body, false);
+  if (read.text) result.text = read.text;
+  if (read.cut) result.textCut = true;
 
   // Headings, images and links in view, each kind up to its limit.
   const found = [];
@@ -140,10 +175,19 @@ export function readPage(options) {
 
   collect("img", limits.images, (element) => {
     const box = element.getBoundingClientRect();
-    // Icons, spacers and trackers are images too, and say nothing.
-    if (box.width < 48 || box.height < 48) return null;
+    // Icons, spacers and trackers are images too, and say nothing. A
+    // small portrait beside a post is the smallest picture worth naming.
+    if (box.width < 32 || box.height < 32) return null;
     const caption = element.closest("figure")?.querySelector("figcaption");
-    const title = oneLine(caption?.innerText) || oneLine(element.alt) || oneLine(element.title) || undefined;
+    // Failing a caption and alt text, what the link or button around the
+    // image is called.
+    const around = element.closest("a,button,[role='img'],[role='link'],[role='button']");
+    const title =
+      oneLine(caption?.innerText) ||
+      oneLine(element.alt) ||
+      oneLine(element.title) ||
+      oneLine(around?.getAttribute("aria-label")) ||
+      undefined;
     const url = address(element.currentSrc || element.src);
     if (!title && !url) return null;
     return { kind: "image", title, url, width: element.naturalWidth || undefined, height: element.naturalHeight || undefined };

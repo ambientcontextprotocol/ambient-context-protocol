@@ -31,12 +31,14 @@ The helper names the app it answers for from its own parent process, so it holds
 - A window and a tab keep Chrome's own ids. A selection keeps its id while the same passage stays selected in the same tab.
 - Selected text is cut at 20,000 characters, and the element then carries `cut: true`.
 - A page Chrome will not let an extension read (its own pages, the Web Store, some document viewers) is reported with its title and address and `readable: false`.
+- The reported window is the browser's front one, so the focus path runs through it even while another app, such as the host's own window, has the keyboard.
+- With a window the extension cannot see in front (Incognito, or another profile's), the answer is the application alone.
 - If the extension does not answer within 150 ms, the answer is the application alone with `state: "no-answer"`.
 - Positions are not reported, so there is no `locate`.
 
 ## What it reads, and when
 
-The extension asks for access to all sites, because a host's key is pressed outside Chrome, where Chrome's narrower "this tab, when clicked" permission never applies. It runs in a page only when a host asks, and reads only the selection. It does not read password boxes. It is not enabled in Incognito windows unless the user allows it there, and it reports nothing for one. Nothing is stored, and nothing leaves the Mac from the extension or the helper; what a host does with the answer is the host's business.
+The extension asks for access to all sites, because a host's key is pressed outside Chrome, where Chrome's narrower "this tab, when clicked" permission never applies. It runs in a page only when a host asks, and reads only the selection. It does not read password boxes. It is not enabled in Incognito windows unless the user allows it there, and it reports nothing for one. Chrome still tells the extension about the last ordinary window when an Incognito one is in front, so the helper keeps track of whether a window the extension cannot see is the browser's front one, and then reports the application alone. For this the extension tells the helper when the keyboard moves between windows, and nothing else unasked. Nothing is stored, and nothing leaves the Mac from the extension or the helper; what a host does with the answer is the host's business.
 
 Any program on the Mac that can read the descriptor's token can ask the helper, as for every provider ([section 8](../../docs/spec/discovery.md)). For a browser that reaches further than for an editor, and it is not yet answered.
 

@@ -80,13 +80,21 @@ struct PageTreeTests {
         #expect(builder.tree(state(selection: "")).children[0].children[0].children.isEmpty)
     }
 
-    @Test func aWindowWithoutTheKeyboardHasNoFocusPath() {
+    @Test func aReportedWindowIsWhereTheUserIsInTheBrowser() {
+        // Another app has the keyboard, as when a host's own window is
+        // open: the page is still the browser's front one.
         var builder = PageTree(appName: "Google Chrome")
         let root = builder.tree(state(focused: false, selection: "words"))
         let window = root.children[0]
-        #expect(!window.focused && !window.children[0].focused && !window.children[0].children[0].focused)
-        #expect(window.children[0].children[0].selected)
+        #expect(window.focused && window.children[0].focused && window.children[0].children[0].focused)
         #expect(ContextTree.check(root).isEmpty)
+    }
+
+    @Test func aWindowThatIsNotInFrontIsNotReported() {
+        var builder = PageTree(appName: "Google Chrome")
+        let root = builder.tree(state(focused: false, selection: "words"), inFront: false)
+        #expect(root.children.isEmpty)
+        #expect(root.attributes?["state"] == nil)
     }
 
     @Test func noAnswerIsTheApplicationAloneAndSaysSo() {
@@ -155,5 +163,55 @@ struct PageTreeTests {
         #expect(message.state?.selection == "x")
         let hello = try JSONDecoder().decode(ExtensionMessage.self, from: Data(#"{"type":"hello"}"#.utf8))
         #expect(hello.state == nil)
+    }
+}
+
+struct FrontWindowTests {
+    @Test func nothingIsReportedUntilAWindowHasBeenSeenInFront() {
+        var front = FrontWindow()
+        // Another app in front, and no look yet at what the browser shows.
+        let look1 = front.look(focused: false, browserActive: false)
+        #expect(!look1)
+        let look2 = front.look(focused: true, browserActive: true)
+        #expect(look2)
+        let look3 = front.look(focused: false, browserActive: false)
+        #expect(look3)
+    }
+
+    @Test func anotherAppInFrontLeavesThePageReported() {
+        var front = FrontWindow()
+        let look4 = front.look(focused: true, browserActive: true)
+        #expect(look4)
+        // The host's own window takes the keyboard, and asks again later.
+        let look5 = front.look(focused: false, browserActive: false)
+        #expect(look5)
+        let look6 = front.look(focused: false, browserActive: false)
+        #expect(look6)
+    }
+
+    @Test func aWindowTheExtensionCannotSeeHidesThePage() {
+        var front = FrontWindow()
+        let look7 = front.look(focused: true, browserActive: true)
+        #expect(look7)
+        // A private window comes to the front: the browser has the
+        // keyboard and the reported window does not.
+        let look8 = front.look(focused: false, browserActive: true)
+        #expect(!look8)
+        #expect(front.hidden)
+        // The user turns to another app with the private window still
+        // the browser's front one.
+        let look9 = front.look(focused: false, browserActive: false)
+        #expect(!look9)
+        // Back to an ordinary window.
+        let look10 = front.look(focused: true, browserActive: true)
+        #expect(look10)
+        let look11 = front.look(focused: false, browserActive: false)
+        #expect(look11)
+    }
+
+    @Test func aStandInBrowserStartsWithNothingHidden() {
+        var front = FrontWindow(hidden: false)
+        let look12 = front.look(focused: false, browserActive: false)
+        #expect(look12)
     }
 }

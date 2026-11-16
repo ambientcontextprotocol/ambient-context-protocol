@@ -27,6 +27,9 @@ final class Extension: @unchecked Sendable {
     private var nextID = 0
     private var waiting: [Int: CheckedContinuation<PageState?, Never>] = [:]
     private let output = FileHandle.standardOutput
+    /// Called when the extension says the keyboard moved to or from one
+    /// of its windows. Set before `read`.
+    var onFocusChange: (@Sendable () -> Void)?
 
     /// How long the extension has to answer. A host waits a fraction of
     /// a second in all, so this is well inside it.
@@ -86,10 +89,14 @@ final class Extension: @unchecked Sendable {
                 reader.append(bytes)
                 do {
                     while let body = try reader.next() {
-                        guard let message = try? JSONDecoder().decode(ExtensionMessage.self, from: body),
-                              message.type == "state", let id = message.id
-                        else { continue }
-                        self.finish(id, with: message.state ?? PageState())
+                        guard let message = try? JSONDecoder().decode(ExtensionMessage.self, from: body) else {
+                            continue
+                        }
+                        if message.type == "state", let id = message.id {
+                            self.finish(id, with: message.state ?? PageState())
+                        } else if message.type == "focus" {
+                            self.onFocusChange?()
+                        }
                     }
                 } catch {
                     note("the stream from the browser is not native messaging; stopping")
@@ -103,13 +110,29 @@ final class Extension: @unchecked Sendable {
     }
 }
 
-/// The tree builder, which remembers the last selection's id.
+/// The tree builder, which remembers the last selection's id, and what
+/// is known of which window is the browser's front one.
 actor Pages {
     private var builder: PageTree
+    private var front: FrontWindow
 
-    init(appName: String) { builder = PageTree(appName: appName) }
+    init(appName: String, front: FrontWindow) {
+        builder = PageTree(appName: appName)
+        self.front = front
+    }
 
-    func tree(_ state: PageState?) -> ContextElement { builder.tree(state) }
+    func tree(_ state: PageState?, browserActive: Bool) -> ContextElement {
+        guard let state else { return builder.tree(nil) }
+        let inFront = front.look(focused: state.window?.focused == true, browserActive: browserActive)
+        return builder.tree(state, inFront: inFront)
+    }
+
+    /// A look with no one asking, so that what was in front is known
+    /// later, when another app is.
+    func look(_ state: PageState?, browserActive: Bool) {
+        guard let state else { return }
+        _ = front.look(focused: state.window?.focused == true, browserActive: browserActive)
+    }
 }
 
 // MARK: - Who started this
@@ -132,12 +155,35 @@ let directory = environment["AMBIENT_CONTEXT_TEST_DIRECTORY"].map { URL(fileURLW
 // MARK: - Run
 
 let bridge = Extension()
-let pages = Pages(appName: appName)
+// A stand-in browser in a test is never the app in front, so nothing
+// could ever be seen there; it starts with nothing hidden.
+let pages = Pages(appName: appName, front: FrontWindow(hidden: browser != nil))
+
+/// Whether the browser is the app in front.
+enum Browser {
+    static func isActive() async -> Bool {
+        let browser = getppid()
+        return await MainActor.run { NSWorkspace.shared.frontmostApplication?.processIdentifier == browser }
+    }
+}
+
+/// Looks at what is in front a moment after it may have changed, once
+/// the browser and the system have both settled.
+@Sendable func lookSoon() {
+    Task {
+        try? await Task.sleep(for: .milliseconds(250))
+        let state = await bridge.current()
+        await pages.look(state, browserActive: await Browser.isActive())
+    }
+}
 let server = ContextServer(
     app: ContextApp(id: "io.github.ambientcontextprotocol.chrome", name: "Ambient Context for Chrome", version: version),
     answersFor: ContextTarget(id: targetID, pid: parent),
     directory: directory ?? ContextDescriptor.defaultDirectory,
-    current: { await pages.tree(await bridge.current()) }
+    current: {
+        let state = await bridge.current()
+        return await pages.tree(state, browserActive: await Browser.isActive())
+    }
 )
 
 @Sendable func stop() {
@@ -159,6 +205,18 @@ let signals = [SIGTERM, SIGINT].map { number -> DispatchSourceSignal in
 // before the descriptor is removed.
 signal(SIGPIPE, SIG_IGN)
 
+// The keyboard moving between the browser's windows, and the browser
+// coming to the front, are the two moments a hidden window can take
+// over without anyone asking.
+bridge.onFocusChange = lookSoon
+let activation = NSWorkspace.shared.notificationCenter.addObserver(
+    forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+) { notification in
+    let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+    if app?.processIdentifier == parent { lookSoon() }
+}
+
 server.start()
 bridge.read(onEnd: stop)
+lookSoon()
 RunLoop.main.run()

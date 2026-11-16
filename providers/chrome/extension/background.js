@@ -1,7 +1,8 @@
 // Ambient Context for Chrome: the extension half.
 //
 // It keeps one connection open to a helper program on this Mac, which is
-// the Ambient Context provider. It sends nothing by itself. When the
+// the Ambient Context provider. Unasked, it sends the helper only the fact
+// that the keyboard moved between windows. When the
 // helper asks what is current, it answers with the window in front, that
 // window's active tab (title and address) and the text selected in the
 // page. Nothing leaves the Mac from here, and nothing is stored.
@@ -99,6 +100,18 @@ function selectedText() {
   if (!typed || box.selectionStart == null || box.selectionStart === box.selectionEnd) return "";
   return box.value.slice(box.selectionStart, box.selectionEnd);
 }
+
+// Tell the helper when the keyboard moves to or from one of this
+// extension's windows, with nothing about the window. The helper uses the
+// moment to work out whether a window this extension cannot see, such as
+// a private one, has come to the front.
+chrome.windows.onFocusChanged.addListener(() => {
+  try {
+    port?.postMessage({ type: "focus" });
+  } catch {
+    // No helper to tell.
+  }
+});
 
 // An open connection to the helper keeps this worker running. The alarm
 // starts it again, and reconnects, if the browser stopped it or the

@@ -204,4 +204,45 @@ struct PublicInterfaceTests {
         #expect(written.pid == ProcessInfo.processInfo.processIdentifier)
         try FileManager.default.removeItem(at: directory)
     }
+
+    /// A provider that answers for another app (RFC-0004, a draft): the
+    /// descriptor says which, and is named so a host finds it by that app.
+    @Test func aDescriptorThatAnswersForAnotherApp() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("acp-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let helper = ContextApp(id: "org.example.helper", name: "Helper", version: "1.0")
+        let own = ProcessInfo.processInfo.processIdentifier
+
+        let file = try ContextDescriptor(
+            app: helper, instance: "i1", endpoint: "http://127.0.0.1:7801/mcp", token: "t",
+            answersFor: ContextTarget(id: "org.example.browser", pid: 4242)
+        ).write(to: directory)
+        #expect(file.lastPathComponent == "org.example.browser.4242.for.\(own).json")
+        let written = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+        let target = try #require(written["for"] as? [String: Any])
+        #expect(target["id"] as? String == "org.example.browser")
+        #expect(target["pid"] as? Int == 4242)
+        #expect(written["pid"] as? Int == Int(own))
+        #expect((written["app"] as? [String: Any])?["id"] as? String == "org.example.helper")
+
+        // An app's own descriptor says nothing of the kind.
+        let plain = try ContextDescriptor(
+            app: helper, instance: "i1", endpoint: "http://127.0.0.1:7801/mcp", token: "t"
+        ).write(to: directory)
+        let plainFields = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: plain)) as? [String: Any])
+        #expect(plainFields["for"] == nil)
+
+        // One left by a provider that is gone is removed; a live one, and
+        // an app's own descriptor, are left alone.
+        let dead = directory.appendingPathComponent("org.example.browser.4242.for.2147483646.json")
+        try Data("{}".utf8).write(to: dead)
+        let live = directory.appendingPathComponent("org.example.browser.4242.for.1.json")
+        try Data("{}".utf8).write(to: live)
+        ContextDescriptor.removeStale(answeringFor: "org.example.browser", pid: own, in: directory)
+        #expect(!FileManager.default.fileExists(atPath: dead.path))
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+        #expect(FileManager.default.fileExists(atPath: live.path))
+        #expect(FileManager.default.fileExists(atPath: plain.path))
+    }
 }

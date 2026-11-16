@@ -37,6 +37,7 @@ import re
 import secrets
 import socket
 import stat
+import subprocess
 import sys
 import threading
 import time
@@ -780,6 +781,18 @@ def parse_endpoint(endpoint):
     return host, port, path, address, path_problems
 
 
+def started_by(pid, parent):
+    """Whether the process `parent` started the process `pid`."""
+    try:
+        found = subprocess.run(["ps", "-o", "ppid=", "-p", str(pid)], capture_output=True, text=True, timeout=5)
+        actual = int(found.stdout.strip())
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        return SKIP, "RFC-0004", "descriptor-for", "could not ask the system (%s)" % type(error).__name__
+    if actual != parent:
+        return FAIL, "RFC-0004", "descriptor-for", "the provider was not started by the process 'for' names"
+    return PASS, "RFC-0004", "descriptor-for", "the provider was started by the app it answers for"
+
+
 def check_descriptor_file(path, results):
     """Reads a descriptor and checks the file. Returns the descriptor or None."""
     try:
@@ -812,7 +825,26 @@ def check_descriptor_file(path, results):
         problems.append("'started' is not a UTC time such as 2026-11-09T21:14:03Z")
     results.judge("PR-018", "descriptor-fields", problems, "the seven fields are present")
 
-    if isinstance(app, dict) and isinstance(app.get("id"), str) and isinstance(pid, int):
+    # A provider that answers for another app (RFC-0004, a draft) names
+    # that app in 'for', and its file after that app and then itself.
+    target = descriptor.get("for")
+    if target is not None:
+        target_ok = (
+            isinstance(target, dict) and isinstance(target.get("id"), str) and target.get("id")
+            and isinstance(target.get("pid"), int) and not isinstance(target.get("pid"), bool) and target["pid"] > 0
+        )
+        if not target_ok:
+            results.add(FAIL, "RFC-0004", "descriptor-for", "'for' is not an object with a string 'id' and a positive 'pid'")
+        elif not isinstance(pid, int):
+            results.add(SKIP, "RFC-0004", "descriptor-for", "pid is unusable")
+        else:
+            expected = "%s.%d.for.%d.json" % (target["id"], target["pid"], pid)
+            if os.path.basename(path) == expected:
+                results.add(PASS, "PR-017", "descriptor-name", "<app-id>.<app-pid>.for.<pid>.json")
+            else:
+                results.add(FAIL, "PR-017", "descriptor-name", "the file is not named <app-id>.<app-pid>.for.<pid>.json after 'for' and its own pid")
+            results.add(*started_by(pid, target["pid"]))
+    elif isinstance(app, dict) and isinstance(app.get("id"), str) and isinstance(pid, int):
         expected = "%s.%d.json" % (app["id"], pid)
         if os.path.basename(path) == expected:
             results.add(PASS, "PR-017", "descriptor-name", "<bundle-id>.<pid>.json")

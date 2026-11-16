@@ -640,6 +640,21 @@ public struct ContextResponder: Sendable {
 
 // MARK: - Descriptor
 
+/// The app a provider answers for when it is not that app's own process
+/// (RFC-0004, a draft): a helper the app started, such as the program a
+/// browser runs for an extension.
+public struct ContextTarget: Equatable, Sendable, Encodable {
+    /// The bundle identifier of the app answered for.
+    public var id: String
+    /// That app's process id, which must be this provider's parent.
+    public var pid: Int32
+
+    public init(id: String, pid: Int32) {
+        self.id = id
+        self.pid = pid
+    }
+}
+
 /// The file a running provider keeps so a host can find it.
 public struct ContextDescriptor: Equatable, Sendable, Encodable {
     public var `protocol`: String
@@ -649,6 +664,14 @@ public struct ContextDescriptor: Equatable, Sendable, Encodable {
     public var endpoint: String
     public var token: String
     public var started: String
+    /// Set only by a provider that answers for another app. `app` and
+    /// `pid` then describe the provider's own program and process.
+    public var answersFor: ContextTarget?
+
+    private enum CodingKeys: String, CodingKey {
+        case `protocol`, app, pid, instance, endpoint, token, started
+        case answersFor = "for"
+    }
 
     /// - Parameters:
     ///   - endpoint: `http://127.0.0.1:<port><path>`, the path being the
@@ -657,7 +680,7 @@ public struct ContextDescriptor: Equatable, Sendable, Encodable {
     public init(
         protocol: String = ContextResponder.protocolVersion, app: ContextApp,
         pid: Int32 = ProcessInfo.processInfo.processIdentifier, instance: String, endpoint: String, token: String,
-        started: String = ISO8601DateFormatter().string(from: Date())
+        started: String = ISO8601DateFormatter().string(from: Date()), answersFor: ContextTarget? = nil
     ) {
         self.protocol = `protocol`
         self.app = app
@@ -666,6 +689,7 @@ public struct ContextDescriptor: Equatable, Sendable, Encodable {
         self.endpoint = endpoint
         self.token = token
         self.started = started
+        self.answersFor = answersFor
     }
 
     /// `~/Library/Application Support/AmbientContext/providers`.
@@ -677,6 +701,18 @@ public struct ContextDescriptor: Equatable, Sendable, Encodable {
 
     public static func fileName(bundleID: String, pid: Int32) -> String {
         "\(bundleID).\(pid).json"
+    }
+
+    /// The name of a descriptor that answers for another app: the app's
+    /// identifier and process id first, so a host finds it by the app in
+    /// front, then the provider's own process id.
+    public static func fileName(answeringFor target: ContextTarget, pid: Int32) -> String {
+        "\(target.id).\(target.pid).for.\(pid).json"
+    }
+
+    /// The name this descriptor is written under.
+    public var fileName: String {
+        answersFor.map { Self.fileName(answeringFor: $0, pid: pid) } ?? Self.fileName(bundleID: app.id, pid: pid)
     }
 
     /// Writes the file where only the user can read it, under a temporary
@@ -694,7 +730,7 @@ public struct ContextDescriptor: Equatable, Sendable, Encodable {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         let data = try encoder.encode(self)
 
-        let destination = directory.appendingPathComponent(Self.fileName(bundleID: app.id, pid: pid))
+        let destination = directory.appendingPathComponent(fileName)
         let temporary = directory.appendingPathComponent(".\(UUID().uuidString).tmp")
         guard files.createFile(atPath: temporary.path, contents: data, attributes: [.posixPermissions: 0o600]) else {
             throw CocoaError(.fileWriteUnknown)
@@ -724,14 +760,39 @@ public struct ContextDescriptor: Equatable, Sendable, Encodable {
     }
 }
 
+extension ContextDescriptor {
+    /// The same for descriptors that answer for the app `bundleID`: those
+    /// whose provider is no longer running, and any naming `pid` itself.
+    public static func removeStale(answeringFor bundleID: String, pid: Int32, in directory: URL) {
+        let files = FileManager.default
+        guard let names = try? files.contentsOfDirectory(atPath: directory.path) else { return }
+        let prefix = bundleID + "."
+        for name in names where name.hasPrefix(prefix) && name.hasSuffix(".json") {
+            // `<app pid>.for.<provider pid>` is what is left of the name.
+            let parts = name.dropFirst(prefix.count).dropLast(".json".count).split(separator: ".")
+            guard parts.count == 3, Int32(parts[0]) != nil, parts[1] == "for", let owner = Int32(parts[2]) else {
+                continue
+            }
+            let running = kill(owner, 0) == 0 || errno == EPERM
+            if owner == pid || !running {
+                try? files.removeItem(at: directory.appendingPathComponent(name))
+            }
+        }
+    }
+}
+
 // MARK: - Server
 
 /// The listener and the descriptor. Start it and a host can find and
 /// read the provider; stop it and both are gone.
 @MainActor
 public final class ContextServer {
-    private let provider: any ContextProvider
+    /// The app's own provider, or nil for one that answers for another
+    /// app and is read through `delegated`.
+    private let provider: (any ContextProvider)?
+    private let delegated: (@Sendable () async -> ContextElement)?
     private let app: ContextResponder.App
+    private let answersFor: ContextTarget?
     private let directory: URL
     private var listener: NWListener?
     private var descriptorURL: URL?
@@ -747,7 +808,29 @@ public final class ContextServer {
 
     public init(provider: any ContextProvider, app: ContextApp, directory: URL = ContextDescriptor.defaultDirectory) {
         self.provider = provider
+        self.delegated = nil
         self.app = app
+        self.answersFor = nil
+        self.directory = directory
+        let queue = DispatchQueue(label: "org.humanitas.ambient-context.server")
+        self.queue = queue
+        self.watches = ContextWatches(queue: queue)
+    }
+
+    /// A provider that answers for another app, which started it
+    /// (RFC-0004, a draft). `app` names this program; `answersFor` names
+    /// the app whose context it reports. Such a provider gets its answer
+    /// from the app each time it is asked, so `current` may wait; it must
+    /// come back well inside a host's time limit, with the application
+    /// alone if the app did not answer.
+    public init(
+        app: ContextApp, answersFor: ContextTarget, directory: URL = ContextDescriptor.defaultDirectory,
+        current: @escaping @Sendable () async -> ContextElement
+    ) {
+        self.provider = nil
+        self.delegated = current
+        self.app = app
+        self.answersFor = answersFor
         self.directory = directory
         let queue = DispatchQueue(label: "org.humanitas.ambient-context.server")
         self.queue = queue
@@ -792,38 +875,51 @@ public final class ContextServer {
         let token = Self.random(bytes: 32)
         let instance = Self.random(bytes: 6)
         let pid = ProcessInfo.processInfo.processIdentifier
-        ContextDescriptor.removeStale(bundleID: app.id, pid: pid, in: directory)
+        if let answersFor {
+            ContextDescriptor.removeStale(answeringFor: answersFor.id, pid: pid, in: directory)
+        } else {
+            ContextDescriptor.removeStale(bundleID: app.id, pid: pid, in: directory)
+        }
 
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: .any)
         parameters.acceptLocalOnly = true
         guard let listener = try? NWListener(using: parameters) else { return }
 
-        let provider = provider
-        // Only a provider that is also a locator answers `locate`.
-        var locate: (@Sendable (String) async -> ContextLocation?)?
-        if let locator = provider as? any ContextLocator {
-            locate = { await locator.locate($0) }
-        }
-        var responder = ContextResponder(
-            app: app, instance: instance, token: token,
-            current: { await provider.current() },
-            locate: locate
-        )
-        // One turn on the main actor for both, so the words describe the
-        // tree they are sent with.
-        // Whatever `@Observable` state the provider reads to answer is
-        // observed as it is read, so a change to it is a change the
-        // server hears of without the app calling `contextDidChange()`.
-        let watches = watches
-        responder.answer = {
-            await MainActor.run {
-                withObservationTracking {
-                    (provider.current(), provider.display())
-                } onChange: {
-                    watches.changed()
+        var responder: ContextResponder
+        if let provider {
+            // Only a provider that is also a locator answers `locate`.
+            var locate: (@Sendable (String) async -> ContextLocation?)?
+            if let locator = provider as? any ContextLocator {
+                locate = { await locator.locate($0) }
+            }
+            responder = ContextResponder(
+                app: app, instance: instance, token: token,
+                current: { await provider.current() },
+                locate: locate
+            )
+            // One turn on the main actor for both, so the words describe the
+            // tree they are sent with.
+            // Whatever `@Observable` state the provider reads to answer is
+            // observed as it is read, so a change to it is a change the
+            // server hears of without the app calling `contextDidChange()`.
+            let watches = watches
+            responder.answer = {
+                await MainActor.run {
+                    withObservationTracking {
+                        (provider.current(), provider.display())
+                    } onChange: {
+                        watches.changed()
+                    }
                 }
             }
+        } else if let delegated {
+            // A provider for another app asks that app each time, so there
+            // is nothing here to observe: it calls `contextDidChange()` when
+            // the app tells it something moved.
+            responder = ContextResponder(app: app, instance: instance, token: token, current: delegated)
+        } else {
+            return
         }
         responder.watches = watches
         let answering = responder
@@ -857,7 +953,8 @@ public final class ContextServer {
             instance: instance,
             endpoint: endpoint,
             token: token,
-            started: ISO8601DateFormatter().string(from: Date())
+            started: ISO8601DateFormatter().string(from: Date()),
+            answersFor: answersFor
         )
         descriptorURL = try? descriptor.write(to: directory)
     }

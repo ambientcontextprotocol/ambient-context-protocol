@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ambient Context</title>
+<style>
+  body { font: 13px/1.5 system-ui, sans-serif; margin: 16px; min-width: 420px; color-scheme: light dark; }
+  h1 { font-size: 15px; margin: 0 0 12px; }
+  label { display: block; margin: 12px 0 4px; font-weight: 600; }
+  p { margin: 4px 0; opacity: 0.75; }
+  textarea { width: 100%; box-sizing: border-box; height: 180px; font: 12px/1.5 ui-monospace, monospace; }
+  .row { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+  .row label { margin: 0; font-weight: 400; }
+  #saved { opacity: 0.75; }
+</style>
+</head>
+<body>
+<h1>Ambient Context</h1>
+<p>When an assistant on this Mac asks, this extension tells it which page is in front and what is selected there. Nothing is sent unless it asks, and nothing leaves this Mac from here.</p>
+
+<div class="row">
+  <input type="checkbox" id="view">
+  <label for="view">Also send what of the page is in view: its visible text, headings, images and links</label>
+</div>
+
+<label for="never">Sites never to read</label>
+<p>One per line, such as <code>bank.example</code>. A name covers the names under it. For these sites only the page's title and address are sent, never its text or your selection.</p>
+<textarea id="never" spellcheck="false"></textarea>
+
+<div class="row">
+  <button id="save">Save</button>
+  <span id="saved"></span>
+</div>
+<script type="module" src="options.js"></script>
+</body>
+</html>

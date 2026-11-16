@@ -29,6 +29,33 @@ public struct PageState: Decodable, Equatable, Sendable {
         }
     }
 
+    /// A heading, image or link in view.
+    public struct Element: Decodable, Equatable, Sendable {
+        /// The extension's number for it, the same each time the same
+        /// page is read.
+        public var n: Int
+        /// `heading`, `image` or `link`. Any other kind is left out.
+        public var kind: String
+        public var title: String?
+        public var url: String?
+        public var level: Int?
+        public var width: Int?
+        public var height: Int?
+
+        public init(
+            n: Int, kind: String, title: String? = nil, url: String? = nil, level: Int? = nil,
+            width: Int? = nil, height: Int? = nil
+        ) {
+            self.n = n
+            self.kind = kind
+            self.title = title
+            self.url = url
+            self.level = level
+            self.width = width
+            self.height = height
+        }
+    }
+
     public var window: Window?
     public var tab: Tab?
     /// The text selected in the page, already shortened by the extension.
@@ -38,15 +65,33 @@ public struct PageState: Decodable, Equatable, Sendable {
     /// False when the browser would not let the page be read: its own
     /// pages, the extension store, some document viewers.
     public var readable: Bool?
+    /// The site is one the user has said never to read: the page is
+    /// named and nothing in it was looked at.
+    public var never: Bool?
+    /// The text of the page that is inside the window.
+    public var text: String?
+    public var textCut: Bool?
+    /// A word for this page that no other page shares, which makes the
+    /// elements' numbers into ids that are never used twice.
+    public var page: String?
+    /// The headings, images and links in view, in the page's order.
+    public var elements: [Element]?
 
     public init(
-        window: Window? = nil, tab: Tab? = nil, selection: String? = nil, cut: Bool? = nil, readable: Bool? = nil
+        window: Window? = nil, tab: Tab? = nil, selection: String? = nil, cut: Bool? = nil, readable: Bool? = nil,
+        never: Bool? = nil, text: String? = nil, textCut: Bool? = nil, page: String? = nil,
+        elements: [Element]? = nil
     ) {
         self.window = window
         self.tab = tab
         self.selection = selection
         self.cut = cut
         self.readable = readable
+        self.never = never
+        self.text = text
+        self.textCut = textCut
+        self.page = page
+        self.elements = elements
     }
 }
 
@@ -66,6 +111,13 @@ public struct PageTree: Sendable {
     /// a host passes on at most. The extension cuts first; this holds if
     /// it does not.
     public static let maxSelection = 20_000
+    /// The most of the page's visible text one answer carries, and the
+    /// most headings, images and links. The extension keeps to the same
+    /// limits; these hold if it does not.
+    public static let maxText = 6_000
+    public static let maxHeadings = 10
+    public static let maxImages = 10
+    public static let maxLinks = 20
 
     public var appName: String
     private var selectionCount = 0
@@ -95,16 +147,22 @@ public struct PageTree: Sendable {
             focused: true
         )
         if state.readable == false { page.attributes = ["readable": false] }
+        if state.never == true {
+            // Named and not read. Whatever else the message holds is
+            // not passed on.
+            page.attributes = ["read": "never"]
+            root.children = [ContextElement(id: "w-\(window.id)", role: .window, focused: true, children: [page])]
+            return root
+        }
+        if let visible = state.text, !visible.isEmpty {
+            let (text, cut) = Self.shortened(visible, to: Self.maxText)
+            page.content = [.text(text)]
+            if cut || state.textCut == true { page.attributes = (page.attributes ?? [:]).merging(["cut": true]) { $1 } }
+        }
 
         if let selected = state.selection, !selected.isEmpty {
-            var text = selected
-            var cut = state.cut == true
-            if text.unicodeScalars.count > Self.maxSelection {
-                var kept = String.UnicodeScalarView()
-                kept.append(contentsOf: text.unicodeScalars.prefix(Self.maxSelection))
-                text = String(kept)
-                cut = true
-            }
+            let (text, shortened) = Self.shortened(selected, to: Self.maxSelection)
+            let cut = shortened || state.cut == true
             let id: String
             if let last, last.tab == tab.id, last.text == text {
                 id = last.id
@@ -118,16 +176,71 @@ public struct PageTree: Sendable {
                 attributes: cut ? ["cut": true] : nil
             )]
         }
+        page.children += Self.inView(state, tab: tab.id)
         root.children = [
             ContextElement(id: "w-\(window.id)", role: .window, focused: true, children: [page]),
         ]
         return root
     }
 
+    // The headings, images and links in view, each kind up to its limit.
+    // An id is the tab, the page's word and the extension's number, so it
+    // stays with one thing while its page is open and is not used again
+    // after. Anything malformed is left out.
+    private static func inView(_ state: PageState, tab: Int) -> [ContextElement] {
+        guard let word = state.page, ContextTree.isElementID(word), word.count <= 16 else { return [] }
+        var left = ["heading": maxHeadings, "image": maxImages, "link": maxLinks]
+        var numbers: Set<Int> = []
+        var found: [ContextElement] = []
+        for element in state.elements ?? [] {
+            guard let room = left[element.kind], room > 0, element.n > 0, !numbers.contains(element.n) else {
+                continue
+            }
+            let title = line(element.title)
+            let url = address(element.url)
+            let id = "e-\(tab)-\(word)-\(element.n)"
+            var made: ContextElement
+            switch element.kind {
+            case "heading":
+                guard title != nil else { continue }
+                made = ContextElement(id: id, role: .heading, title: title)
+                if let level = element.level, (1...6).contains(level) { made.attributes = ["level": .integer(level)] }
+            case "image":
+                guard title != nil || url != nil else { continue }
+                made = ContextElement(id: id, role: .image, title: title, url: url)
+                if let width = element.width, let height = element.height, width > 0, height > 0 {
+                    made.attributes = ["width": .integer(width), "height": .integer(height)]
+                }
+            default:
+                guard title != nil, url != nil else { continue }
+                made = ContextElement(id: id, role: .link, title: title, url: url)
+            }
+            left[element.kind] = room - 1
+            numbers.insert(element.n)
+            found.append(made)
+        }
+        return found
+    }
+
+    // An address a host can pass on: the web's two schemes only.
+    private static func address(_ text: String?) -> String? {
+        guard let text, text.count <= 2_000, let url = URL(string: text),
+              let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https"
+        else { return nil }
+        return text
+    }
+
+    private static func shortened(_ text: String, to limit: Int) -> (String, Bool) {
+        guard text.unicodeScalars.count > limit else { return (text, false) }
+        var kept = String.UnicodeScalarView()
+        kept.append(contentsOf: text.unicodeScalars.prefix(limit))
+        return (String(kept), true)
+    }
+
     // A title is one line; a page's can be anything.
     private static func line(_ title: String?) -> String? {
         guard let title else { return nil }
-        let flat = title.split(whereSeparator: \.isNewline).joined(separator: " ")
+        let flat = title.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         return flat.isEmpty ? nil : String(flat.prefix(300))
     }
 }

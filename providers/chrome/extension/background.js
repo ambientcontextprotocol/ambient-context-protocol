@@ -4,14 +4,17 @@
 // the Ambient Context provider. Unasked, it sends the helper only the fact
 // that the keyboard moved between windows. When the
 // helper asks what is current, it answers with the window in front, that
-// window's active tab (title and address) and the text selected in the
-// page. Nothing leaves the Mac from here, and nothing is stored.
+// window's active tab (title and address), the text selected in the
+// page and, unless switched off, what of the page is in view. Sites on
+// the never-read list are named and not read. Nothing leaves the Mac from
+// here, and nothing of a page is stored.
+
+import { DEFAULT_SETTINGS, combine, neverRead } from "./lib.js";
+import { readPage } from "./page.js";
 
 const HOST = "io.github.ambientcontextprotocol.chrome";
-// The most selected text sent, in characters: what a host passes on.
-const MAX_SELECTION = 20000;
-// How long the page has to give its selection. The helper waits 150 ms
-// for the whole answer, so a slow page costs the selection, not the page.
+// How long the page has to answer. The helper waits 150 ms for the whole
+// answer, so a slow page costs what is in it, not the page itself.
 const PAGE_LIMIT_MS = 100;
 
 let port = null;
@@ -62,43 +65,25 @@ async function current() {
     window: { id: frontmost.id, focused: frontmost.focused === true },
     tab: { id: tab.id, title: tab.title || undefined, url: tab.url || undefined },
   };
-  const read = await selection(tab.id);
-  state.readable = read.readable;
-  if (read.text) {
-    state.selection = read.text.slice(0, MAX_SELECTION);
-    if (read.text.length > MAX_SELECTION) state.cut = true;
+  const settings = Object.assign({}, DEFAULT_SETTINGS, await chrome.storage.local.get(["view", "never"]));
+  // A site the user has said never to read: the page is named and
+  // nothing in it is looked at, not even the selection.
+  if (neverRead(tab.url, settings.never)) {
+    state.never = true;
+    return state;
   }
-  return state;
+  return Object.assign(state, await read(tab.id, settings.view !== false));
 }
 
-// The selected text, from whichever frame of the page has one. Runs in
-// the page only when asked, and reads only the selection.
-async function selection(tabId) {
+// Runs `readPage` in the page, only when asked: the selection from
+// whichever frame has one and, from the top frame, what is in view.
+async function read(tabId, view) {
   const timeout = new Promise((resolve) => setTimeout(() => resolve(null), PAGE_LIMIT_MS));
   const reading = chrome.scripting
-    .executeScript({ target: { tabId, allFrames: true }, func: selectedText })
+    .executeScript({ target: { tabId, allFrames: true }, func: readPage, args: [{ view }] })
+    // The browser refused: one of its own pages, the store, some viewers.
     .catch(() => undefined);
-  const frames = await Promise.race([reading, timeout]);
-  // Too slow: the page may be readable, and no selection is reported.
-  if (frames === null) return { readable: true, text: "" };
-  // The browser refused: one of its own pages, the store, some viewers.
-  if (frames === undefined) return { readable: false, text: "" };
-  const found = frames.map((frame) => frame.result).find((text) => typeof text === "string" && text.length > 0);
-  return { readable: true, text: found || "" };
-}
-
-// Runs inside the page. The selection in the document or, when the
-// cursor is in a text box, the selected part of what was typed there. A
-// password box has no selection to give.
-function selectedText() {
-  const picked = window.getSelection();
-  const text = picked ? picked.toString() : "";
-  if (text) return text;
-  const box = document.activeElement;
-  if (!box) return "";
-  const typed = box.tagName === "TEXTAREA" || (box.tagName === "INPUT" && /^(text|search|url|tel|email)$/.test(box.type));
-  if (!typed || box.selectionStart == null || box.selectionStart === box.selectionEnd) return "";
-  return box.value.slice(box.selectionStart, box.selectionEnd);
+  return combine(await Promise.race([reading, timeout]));
 }
 
 // Tell the helper when the keyboard moves to or from one of this

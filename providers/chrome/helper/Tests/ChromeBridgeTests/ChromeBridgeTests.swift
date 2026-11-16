@@ -146,6 +146,106 @@ struct PageTreeTests {
         #expect(page.children.isEmpty)
     }
 
+    @Test func whatIsInViewIsThePagesTextAndItsChildren() {
+        var builder = PageTree(appName: "Google Chrome")
+        var seen = state(selection: "picked")
+        seen.text = "The seven vices\nFirst paragraph in view."
+        seen.page = "k3f9x2"
+        seen.elements = [
+            .init(n: 1, kind: "link", title: "Issues", url: "https://site.example/issues"),
+            .init(n: 2, kind: "heading", title: "The seven vices", level: 1),
+            .init(n: 3, kind: "image", title: "A gin palace", url: "https://site.example/p.jpg", width: 1200, height: 800),
+        ]
+        let root = builder.tree(seen)
+        #expect(ContextTree.check(root).isEmpty)
+        let page = root.children[0].children[0]
+        #expect(page.content == [.text("The seven vices\nFirst paragraph in view.")])
+        #expect(page.attributes == nil)
+        // The selection first, then what is in view in the page's order.
+        #expect(page.children.map(\.role) == [.text, .link, .heading, .image])
+        #expect(page.children.map(\.id) == ["sel-44-1", "e-44-k3f9x2-1", "e-44-k3f9x2-2", "e-44-k3f9x2-3"])
+        let heading = page.children[2]
+        #expect(heading.title == "The seven vices" && heading.attributes?["level"] == 1)
+        let image = page.children[3]
+        #expect(image.title == "A gin palace" && image.url == "https://site.example/p.jpg")
+        #expect(image.attributes?["width"] == 1200 && image.attributes?["height"] == 800)
+        // Only the selection is selected, and nothing in view is focused.
+        #expect(page.children.dropFirst().allSatisfy { !$0.selected && !$0.focused })
+        // The same page read again gives the same ids.
+        #expect(builder.tree(seen).children[0].children[0].children.map(\.id) == page.children.map(\.id))
+    }
+
+    @Test func whatIsMalformedInViewIsLeftOut() {
+        var builder = PageTree(appName: "Google Chrome")
+        var seen = state()
+        seen.page = "k3f9x2"
+        seen.elements = [
+            .init(n: 1, kind: "link", title: "No address"),
+            .init(n: 2, kind: "link", title: "Script", url: "javascript:alert(1)"),
+            .init(n: 3, kind: "link", title: "File", url: "file:///etc/passwd"),
+            .init(n: 4, kind: "heading", title: "  "),
+            .init(n: 5, kind: "video", title: "Unknown kind", url: "https://e.org/v"),
+            .init(n: 6, kind: "image"),
+            .init(n: 7, kind: "link", title: "Good", url: "https://e.org/a"),
+            .init(n: 7, kind: "link", title: "Same number", url: "https://e.org/b"),
+            .init(n: 0, kind: "link", title: "No number", url: "https://e.org/c"),
+            .init(n: 8, kind: "heading", title: "Odd level", level: 9),
+            .init(n: 9, kind: "image", title: "Data picture", url: "data:image/png;base64,AAAA"),
+        ]
+        let page = builder.tree(seen).children[0].children[0]
+        #expect(page.children.map(\.title) == ["Good", "Odd level", "Data picture"])
+        #expect(page.children[1].attributes == nil)
+        #expect(page.children[2].url == nil)
+        #expect(ContextTree.check(builder.tree(seen)).isEmpty)
+
+        // Without the page's word, or with one that is not an id, the
+        // numbers mean nothing and no element is made.
+        seen.page = nil
+        #expect(builder.tree(seen).children[0].children[0].children.isEmpty)
+        seen.page = "not an id!"
+        #expect(builder.tree(seen).children[0].children[0].children.isEmpty)
+    }
+
+    @Test func eachKindInViewHasItsLimit() {
+        var builder = PageTree(appName: "Google Chrome")
+        var seen = state()
+        seen.page = "p"
+        seen.elements = (1...30).map { .init(n: $0, kind: "link", title: "L\($0)", url: "https://e.org/\($0)") }
+            + (31...50).map { .init(n: $0, kind: "heading", title: "H\($0)") }
+            + (51...70).map { .init(n: $0, kind: "image", title: "I\($0)") }
+        let children = builder.tree(seen).children[0].children[0].children
+        #expect(children.filter { $0.role == .link }.count == PageTree.maxLinks)
+        #expect(children.filter { $0.role == .heading }.count == PageTree.maxHeadings)
+        #expect(children.filter { $0.role == .image }.count == PageTree.maxImages)
+
+        seen.elements = nil
+        seen.text = String(repeating: "a", count: PageTree.maxText + 10)
+        let page = builder.tree(seen).children[0].children[0]
+        guard case .text(let text)? = page.content?.first else {
+            Issue.record("no text")
+            return
+        }
+        #expect(text.count == PageTree.maxText)
+        #expect(page.attributes?["cut"] == true)
+    }
+
+    @Test func aSiteNeverToReadIsNamedAndNothingMore() {
+        var builder = PageTree(appName: "Google Chrome")
+        // Even if the extension were to send more, none of it is passed on.
+        var seen = state(selection: "should not be here")
+        seen.never = true
+        seen.text = "nor this"
+        seen.page = "p"
+        seen.elements = [.init(n: 1, kind: "heading", title: "nor this")]
+        let root = builder.tree(seen)
+        let page = root.children[0].children[0]
+        #expect(page.title == "RFC 3986" && page.url == "https://www.rfc-editor.org/rfc/rfc3986")
+        #expect(page.content == nil && page.children.isEmpty)
+        #expect(page.attributes?["read"] == "never")
+        #expect(root.children[0].focused && page.focused)
+        #expect(ContextTree.check(root).isEmpty)
+    }
+
     @Test func aTitleIsOneLine() {
         var builder = PageTree(appName: "Google Chrome")
         var odd = state()

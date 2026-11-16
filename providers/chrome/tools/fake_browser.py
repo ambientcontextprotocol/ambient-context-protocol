@@ -27,6 +27,13 @@ STATE = {
     "tab": {"id": 44, "title": "Uniform Resource Identifier (URI): Generic Syntax", "url": "https://www.rfc-editor.org/rfc/rfc3986"},
     "selection": "A URI is a sequence of characters.",
     "readable": True,
+    "text": "Uniform Resource Identifier (URI): Generic Syntax\nA URI is a sequence of characters.",
+    "page": "k3f9x2",
+    "elements": [
+        {"n": 1, "kind": "heading", "title": "Uniform Resource Identifier (URI): Generic Syntax", "level": 1},
+        {"n": 2, "kind": "image", "title": "A diagram of a URI's parts", "url": "https://www.rfc-editor.org/uri.png", "width": 600, "height": 200},
+        {"n": 3, "kind": "link", "title": "RFC 2396", "url": "https://www.rfc-editor.org/rfc/rfc2396"},
+    ],
 }
 
 

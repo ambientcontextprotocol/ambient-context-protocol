@@ -157,6 +157,9 @@ export function readPage(options) {
     for (const element of document.querySelectorAll(selector)) {
       if (taken >= limit || late()) break;
       if (!inView(element)) continue;
+      // As for the text: the site's own parts are left out where the
+      // page marks its content.
+      if (main && element.closest(FURNITURE)) continue;
       const described = describe(element);
       if (!described) continue;
       found.push({ element, described });

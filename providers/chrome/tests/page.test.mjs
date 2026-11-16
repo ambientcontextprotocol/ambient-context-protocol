@@ -30,7 +30,7 @@ const FIXTURE = `<!doctype html>
 <a href="/photo" aria-label="Opens profile photo"><div style="width:120px;height:120px;background:#ccc"><img src="https://example.invalid/avatar.jpg" alt="" width="120" height="120" style="opacity:0"></div></a>
 <div><span style="margin-right:12px">San Francisco, CA</span><span style="margin-right:12px">murraycole.com</span><span>Born January 1</span></div>
 <div><span><b>bold</b>ly joined</span> <span style="opacity:0">unseen words</span></div>
-<aside><p>You might like these.</p></aside>
+<aside><h2>You might like</h2><p>You might like these.</p><img src="https://example.invalid/suggested.jpg" alt="Suggested account" width="64" height="64"></aside>
 <h2>Second heading</h2>
 <p>Second paragraph in view.</p>
 <form><input type="text" value="typed secret"><textarea>typed draft</textarea><button>Send it</button></form>
@@ -92,6 +92,8 @@ test("the page reader, in a real page", { skip: !existsSync(CHROME) && "Chrome i
     assert.equal(first.textCut, undefined);
 
     const kinds = (kind) => first.elements.filter((element) => element.kind === kind);
+    // Headings and images in the site's own parts are left out with its text.
+    assert.ok(first.elements.every((element) => !/You might like|Suggested account/.test(element.title || "")));
     assert.deepEqual(kinds("heading").map((h) => [h.title, h.level]), [["The seven vices", 1], ["Second heading", 2]]);
     // The caption names the image; the icon is left out.
     // A clear image over a drawn background is still the picture, named

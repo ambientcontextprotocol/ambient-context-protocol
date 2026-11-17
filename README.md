@@ -1,3 +1,5 @@
+![Ambient Context Protocol](assets/brand/social-preview.png)
+
 # Ambient Context Protocol
 
 > A way for a desktop app to tell an agent what you have open, what you have selected, and where it is on screen.

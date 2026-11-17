@@ -5,9 +5,9 @@
 | Field | Value |
 |---|---|
 | Author | The protocol session, for Andrew Jones, with the Sirius session on the host's side |
-| Status | Draft |
+| Status | Accepted |
 | Created | `2026.11.17` |
-| Decided | |
+| Decided | `2026.11.17` |
 | Discussion | Not yet opened as a pull request |
 | Specification sections | 3 (principle 3), new 4.4, 7.1, 7.2, new 7.7, 7.4, 9.1, 9.2, 10, 12, 14 |
 | Version effect | Additive: `0.2.1` to `0.2.2` |
@@ -77,10 +77,10 @@ Scope and exclusions:
    - *Coalesce.* At most one notice in any 250 milliseconds on one watch, and the last change always produces a notice: a provider may delay a notice, never drop the final one.
    - *Say nothing else.* A notice carries the address and the subscription id and nothing from the app.
    - *Keep quiet streams alive.* On a watch with nothing to say, send an SSE comment line at least every 15 seconds, so a host can tell a quiet provider from a dead one.
-   - *Bound the watches.* A provider may limit how many watches it holds at once, to no fewer than four, and may end any watch at any time. It ends them all when it quits and when the user turns the provider off.
+   - *Bound the watches.* A provider may limit how many watches it holds at once, to no fewer than four, and may end any watch at any time, in particular one that has been open longer than ten minutes. It ends them all when it quits and when the user turns the provider off.
    - *Know your own changes.* A provider notices changes from the app's own events (a selection changed, a document opened). It does not find them by rebuilding its answer on a timer: that is polling moved into the app.
 8. *Rules for hosts (9.2).* "Ask on the user's action" gains a second sentence: after such a read, and only while the host is showing the user that provider's context, a host may hold one watch on that provider and read `current` again when a notice arrives.
-   - *One watch, one provider, in view.* A host opens a watch only on the provider it has just read on the user's action, holds one at a time, and ends it when the message is sent, the context is removed or its interface closes. It does not watch an app the user is not being shown context from.
+   - *One watch, one provider, in view.* A host opens a watch only on the provider it has just read on the user's action, holds one at a time however many of its interfaces show that context, and ends it when the message is sent, the context is removed or its interface closes. It does not watch an app the user is not being shown context from.
    - *A notice is not context.* A host learns the new state only by reading `current`, with every check a read has, the instance check included.
    - *One read per notice, at most.* A host that gets a notice while a read is outstanding finishes that read and reads once more. It does not read except on the user's action or a notice.
    - *A lost watch is silence.* If the stream ends or fails, the host carries on with what it last read, shows the user no error, and may try to open the watch again once. It still reads at send.
@@ -153,4 +153,8 @@ In the product model, PR-035 (a host requests context only in response to an act
 
 ## 10. Decision and outcome
 
-Pending.
+Accepted on 2026.11.17 by Andrew Jones, maintainer, on the revision of commit `f900866`, for protocol version `0.2.2`.
+
+Why: the line a host shows must stay true while the user is looking at it, and polling was ruled out. The mechanism is MCP's own, optional for a provider, and a `0.2.1` provider or host is unaffected.
+
+On the open questions of section 9, as accepted: (1) a change in `hovered` alone sends no notice; (2) the numbers stand at 250 milliseconds, 15 seconds and no fewer than four watches; (3) a provider may end a watch that has been open longer than ten minutes, and need not; (4) one watch per provider for a host, however many of its interfaces show that context. Questions 5 and 6 stay open during implementation. The first implementation offers `watch` from the packages' own listener (`ContextServer`); a responder mounted on an app's own server does not offer it yet.

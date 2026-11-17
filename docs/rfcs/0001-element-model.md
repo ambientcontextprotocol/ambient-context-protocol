@@ -5,14 +5,14 @@
 | Field | Value |
 |---|---|
 | Author | The protocol session, for Andrew Jones |
-| Status | Accepted |
+| Status | Released |
 | Created | `2026.11.10` |
 | Decided | `2026.11.10` |
 | Discussion | Not yet opened as a pull request |
 | Specification sections | 2 (example), 4 (operations), 5 (items), 9 (rules), 10 (versioning) |
 | Version effect | Breaking: `0.1` to `0.2.0` |
 | Supersedes or amends | None. Amended by RFC-0003 (a hovered state) |
-| Released in | — |
+| Released in | `0.2.0` |
 
 ## 1. Summary
 
@@ -174,4 +174,4 @@ Accepted on 2026.11.10 by Andrew Jones, maintainer, on the revision that carries
 
 Why: every kind of thing the three existing providers send was mapped onto the thirteen roles with the app's own word in `subrole`, and all fit; the tree states how things relate, which the flat list could not.
 
-Accepted together with RFC-0002 for the same version. Implementation begins after the host's release scheduled for 2026.11.11. Not yet implemented or released.
+Accepted together with RFC-0002 for the same version. Implementation begins after the host's release scheduled for 2026.11.11. Released in protocol version `0.2.0`.

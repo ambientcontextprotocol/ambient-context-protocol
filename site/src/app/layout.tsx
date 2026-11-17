@@ -1,10 +1,13 @@
 import { RootProvider } from 'fumadocs-ui/provider/next';
 import type { Metadata } from 'next';
 import { name } from '@/lib/name';
+import { social, siteUrl } from '@/lib/social';
 import './global.css';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: { template: `%s | ${name}`, default: name },
+  ...social(),
   icons: { icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }] },
 };
 

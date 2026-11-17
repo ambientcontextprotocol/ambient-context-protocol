@@ -1,3 +1,4 @@
+import { social } from '@/lib/social';
 import { markdownUrl, source } from '@/lib/source';
 import { DocsBody, DocsDescription, DocsPage, DocsTitle } from 'fumadocs-ui/layouts/notebook/page';
 import { notFound } from 'next/navigation';
@@ -41,5 +42,6 @@ export async function generateMetadata(props: PageProps<'/[...slug]'>): Promise<
   return {
     title: page.data.title,
     description: page.data.description,
+    ...social({ title: page.data.title, description: page.data.description, path: page.url }),
   };
 }

@@ -90,6 +90,20 @@ extension NotesContext {
 
 The picture is not sent. Ship it as a file in the app's bundle, `Contents/Resources/favicon.svg`, or `favicon.png` (at least 32 by 32 pixels) when there is no SVG. The host finds it there itself. Draw a simple shape in one light color: it is shown at about 16 points, often on a dark surface.
 
+## Say when it changes (optional)
+
+A host that shows the user what it read is showing a moment: when the user selects something else, its line is stale until it reads again. A host may therefore watch a provider, and the provider tells it, with no content, that the answer to `current` changed. `ContextServer` offers this by itself. The app's part is one call, made wherever its selection, focus, open documents or their titles change:
+
+```swift
+NotificationCenter.default.addObserver(
+    forName: NSTextView.didChangeSelectionNotification, object: nil, queue: .main
+) { _ in server.contextDidChange() }
+```
+
+Call it from the app's own events, never from a timer, and not for the pointer moving: a change in `hovered` alone is not told. It may be called as often as the app likes and from any thread. It does nothing when no host is watching. Otherwise the server gathers calls into at most one notice in 250 milliseconds, always tells the last change, and compares the new answer with the last one so that a call after which nothing differs tells nothing. The server keeps quiet watches alive, holds at most eight, and ends them all at `stop()`.
+
+A `ContextResponder` mounted on the app's own server does not offer `watch` yet: it answers one request with one response, and a watch is a response that stays open.
+
 ## Say where it is (optional)
 
 A provider that can report where an element is on screen also conforms to `ContextLocator`. A host can then place its own interface beside the element.

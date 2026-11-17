@@ -241,6 +241,32 @@ Before anything is sent, a host shows the user what it read: a small picture, wh
 
 The picture is never sent. Ship it as a file in your app: on macOS, `Contents/Resources/favicon.svg` in the bundle, or `favicon.png` (at least 32 by 32 pixels) when there is no SVG. The host finds it there itself, from the process it identified as your app. Draw a simple shape in one light color; it is shown at about 16 points, often on a dark surface. Without one, a host draws your app's system icon or nothing.
 
+### Say when it changes (optional)
+
+A host that shows the user what it read is showing a moment. If the user then selects something else in your app, the host's line is stale until it reads again. A provider can offer `watch` so the host knows when to: declare `"resources": { "subscribe": true }` in your capabilities and answer MCP's `subscriptions/listen` for `ambient://current` by holding the response open as an event stream.
+
+```http title="The watch request"
+POST /mcp HTTP/1.1
+Authorization: Bearer <token>
+Accept: application/json, text/event-stream
+MCP-Protocol-Version: 2026-07-28
+Mcp-Method: subscriptions/listen
+
+{"jsonrpc":"2.0","id":2,"method":"subscriptions/listen","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}},"notifications":{"resourceSubscriptions":["ambient://current"]}}}
+```
+
+```text title="What you write to the stream"
+event: message
+data: {"jsonrpc":"2.0","method":"notifications/subscriptions/acknowledged","params":{"_meta":{"io.modelcontextprotocol/subscriptionId":2},"notifications":{"resourceSubscriptions":["ambient://current"]}}}
+
+event: message
+data: {"jsonrpc":"2.0","method":"notifications/resources/updated","params":{"_meta":{"io.modelcontextprotocol/subscriptionId":2},"uri":"ambient://current"}}
+
+: keep-alive
+```
+
+Send the acknowledgment at once, with the response's headers. Then send the second message each time your answer to `current` changes: at most once in any 250 milliseconds, never dropping the last change, and never for the pointer moving alone. It says only that something changed; the host reads `current` to learn what. Send a comment line at least every 15 seconds while there is nothing to say. Learn of changes from your app's own selection, focus and document events, not by rebuilding the answer on a timer. Check the token and refuse `Origin` before opening the stream, exactly as for a read. The [binding](/specification/binding#77--watching) has the rest. The Swift and TypeScript packages do all of this from one call, `contextDidChange()`.
+
 ## Answer `locate`
 
 The host asks where an element is by reading `ambient://location/{id}` with the element's id in place of `{id}`. Only the address in the body and in the `Mcp-Name` header changes.

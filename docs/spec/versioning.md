@@ -17,7 +17,7 @@ Every change to this specification that alters behavior goes through the [RFC pr
 ## 12. Not in version 0.2.2
 
 - **What changed.** A request for what changed since a point the host names ("a task was moved to tomorrow"), so an agent can resolve "what I just did."
-- **Watching.** A provider telling the host when context, a location or the pointer's position changes. MCP resources already support subscriptions, so this needs no new mechanism, only a decision to allow it.
+- **Watching a location or the pointer.** A provider telling the host when a location or the pointer's position changes. Version 0.2.2 allows a watch on `current` only ([4.4](operations.md#44--watch)), and a change in `hovered` alone is not told.
 - **Other visible apps.** One line of context for each visible app that is not in front.
 - **Actions.** A provider declaring operations an agent can run on an element.
 - **Things that are not open.** Search over what the app holds but is not showing.
@@ -40,6 +40,10 @@ Every change to this specification that alters behavior goes through the [RFC pr
 9. Whether a host can confirm, from the process id and port, that a provider's socket is bound to loopback only, and whether discovery should require it.
 10. Whether a provider should report `hovered` only once the pointer has rested for a moment. The current answer is no: the provider reports the fact and the host decides its weight.
 11. Whether a touch-and-hold on a device with no pointer deserves the same state.
+12. Whether a watch should tell of the pointer. A change in `hovered` alone sends no notice ([4.4](operations.md#44--watch)), so a host that showed the hovered thing would show a stale one. No host does today.
+13. The numbers for a watch: 250 milliseconds between notices, 15 seconds between keep-alives, four as the least number of watches a provider holds, ten minutes as the age at which it may end one. They were chosen from what the first host needed and are to be set from what the first providers do.
+14. Whether a host with more than one interface showing context at once holds one watch or one for each. Version 0.2.2 says one.
+15. Watching on a shared listener. It needs the app's server to hold a response open, which "one request in, one response out" does not describe. The first packages offer `watch` only on a listener of their own.
 
 ## Changelog
 

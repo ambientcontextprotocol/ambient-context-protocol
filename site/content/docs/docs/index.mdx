@@ -51,7 +51,7 @@ Three parties are involved. Two of them take part in the protocol.
   </Card>
 </Cards>
 
-A provider offers two operations. Both are reads, and each is an ordinary MCP resource that the host reads with `resources/read`:
+A provider offers two reads, each an ordinary MCP resource that the host reads with `resources/read`:
 
 | Operation | Resource | Question it answers |
 |---|---|---|
@@ -59,6 +59,8 @@ A provider offers two operations. Both are reads, and each is an ordinary MCP re
 | `locate` | `ambient://location/{id}` | Where on screen is the element with this id? |
 
 The answer to `current` is one tree of elements rooted at the app: its windows, the documents in them, and what is selected, focused or under the pointer.
+
+A provider may offer a third operation, `watch`: while a host is showing the user what it read, the provider tells it when the answer to `current` changes, with no content, and the host reads again.
 
 A typical exchange:
 
@@ -86,7 +88,7 @@ The provider never learns what the host drew, and the agent never sees a coordin
 
 - **The app says where; the host decides what.** A provider reports elements and their positions. It never names what the host draws there.
 - **A shared language for how a thing is shown, the app's own word for what it is.** Every element has a `role` from a fixed list of thirteen, such as `Window`, `List`, `Row` or `Text`, which a program can write rules against. What the thing is to the app, such as a task or a comment, goes in `subrole` and `attributes`, which the app defines freely.
-- **Pulled on the user's action.** A host asks for context when the user does something that calls for it. A provider does not push, and a host does not poll. This is provisional in `0.2.2`.
+- **Pulled on the user's action, and kept current while the user is looking.** A host asks for context when the user does something that calls for it. While it is showing the user what it read, it may ask the provider to say when that changes. A provider sends nothing a host did not ask for, and a host does not poll.
 - **It is ordinary MCP.** A provider is an MCP server and the two answers are MCP resources. A client that has never heard of the protocol can still list and read them.
 
 ## Start building

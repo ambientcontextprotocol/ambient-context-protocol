@@ -80,4 +80,4 @@ A host that shows the user what it read ([4.3](operations.md#43--display)) may d
 2. Read no more than a size limit of the host's choosing, and treat a file that is missing, larger than the limit or not a readable image as absent.
 3. With no favicon, draw what it would for any app, such as the app's system icon, or nothing.
 
-A process that answers for an app it does not own has no bundle of that app to put a file in, and gets what step 3 gives. Answering for another program is not in this version ([section 12](versioning.md#12-not-in-version-021)).
+A process that answers for an app it does not own has no bundle of that app to put a file in, and gets what step 3 gives. Answering for another program is not in this version ([section 12](versioning.md#12-not-in-version-022)).

@@ -28,7 +28,7 @@ Last updated: `2026.11.17`
 
 1. *The app says where; the host decides what.* A provider reports items and their positions. It never names what the host draws there.
 2. *A shared language for how a thing is shown, the app's own word for what it is.* Every element has a role from a short fixed list; what the thing is to the app goes in its subrole and attributes. A text editor, a task tracker and a design tool all fit without the protocol knowing what a task or a frame is. (In 0.1: an envelope, not a domain model.)
-3. *Pulled on the user's action.* A host asks for context when the user does something that calls for it. A provider does not push, and a host does not poll. Provisional: this holds for version 0.2.0 and may change.
+3. *Pulled on the user's action, and kept current while the user is looking.* A host asks for context when the user does something that calls for it. While it is showing the user what it read, it may ask the provider to say when that changes. A provider sends nothing a host did not ask for, and a host does not poll.
 4. *It is ordinary MCP.* A provider is an MCP server and the two answers are MCP resources. A client that has never heard of the protocol can still list and read them.
 
 ---

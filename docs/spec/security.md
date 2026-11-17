@@ -6,7 +6,12 @@
 
 ### 9.1 — For providers
 
-- **Answer only when asked.** Send nothing unprompted.
+- **Send nothing a host did not ask for.** A provider answers requests. A notice on a watch a host opened ([4.4](operations.md#44--watch)) is asked for; nothing else is sent.
+- **Know your own changes.** A provider that offers `watch` learns that its answer changed from the app's own events: a selection changed, a document opened. It does not find changes by rebuilding its answer on a timer, which is polling moved into the app.
+- **Gather notices.** At most one notice in any 250 milliseconds on one watch, and the last change always produces a notice. A provider may delay a notice; it never drops the final one. A change in `hovered` alone produces none.
+- **Say nothing in a notice.** A notice carries the address and the subscription id, and nothing from the app.
+- **Keep quiet watches alive.** On a watch with nothing to say, send a comment line at least every 15 seconds, so a host can tell a quiet provider from a dead one.
+- **Bound the watches.** A provider may limit how many watches it holds at once, to no fewer than four, and may end any watch at any time, in particular one that has been open longer than ten minutes. It ends them all when it quits and when the user turns the provider off.
 - **Answer from what you already hold.** `current` is answered from state the app has in memory, without waiting on disk or network.
 - **Keep ids meaningful.** An id refers to the element it was minted for, for as long as that thing exists and the app is running. An id for a text selection keeps referring to that passage after the user selects something else, and follows the passage through edits where it can. A provider does not reuse an id while it is running. When the thing is gone, answer `gone`.
 - **Say each state once.** `selected`, `focused`, `visible` and `hovered` are stated on the element they describe and nowhere else ([5.3](elements.md#53--states)).
@@ -17,7 +22,11 @@
 
 ### 9.2 — For hosts
 
-- **Ask on the user's action.** Read `current` when the user invokes the agent, not on a timer.
+- **Ask on the user's action.** Read `current` when the user invokes the agent, not on a timer. After such a read, and only while the host is showing the user that provider's context, it may hold one watch on that provider ([4.4](operations.md#44--watch)) and read `current` again when a notice arrives. It reads at no other time.
+- **One watch, one provider, in view.** A host opens a watch only on the provider it has just read on the user's action. It holds one at a time, however many of its interfaces show that context, and ends it when the message is sent, the context is removed or its interface closes. It does not watch an app the user is not being shown context from.
+- **A notice is not context.** A host learns the new state only by reading `current`, with every check a read has, the instance check included.
+- **One read per notice, at most.** A host that gets a notice while a read is outstanding finishes that read and reads once more. It never has two reads outstanding.
+- **A lost watch is silence.** If a watch's stream ends or fails, the host carries on with what it last read, shows the user no error, and may try to open the watch again once. It still reads at send.
 - **Ask the front app only.** Which app is in front is the host's knowledge, from the operating system; the `focused` path in a provider's answer says what has focus inside that app. A host passes the front app's context in full. A user asking about a paragraph in an editor does not expect their mail to go along.
 - **Show what was collected.** Before a message is sent, the user must be able to see which context will go with it, and remove it.
 - **A label is not the context.** `display` ([4.3](operations.md#43--display)) is the app's wording for what was collected. A host that shows it still lets the user remove the context it labels, draws it as plain text from another program, and never refuses an answer because `display` is missing or malformed.

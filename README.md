@@ -59,7 +59,7 @@ A running provider announces itself with a descriptor file that only the user ca
 
 1. *The app says where; the host decides what.* A provider reports elements and their positions. It never names what the host draws there.
 2. *A shared language for how a thing is shown, the app's own word for what it is.* Thirteen roles every app shares; the subrole and attributes are the app's to define.
-3. *Pulled on the user's action.* A host asks for context when the user does something that calls for it. Provisional in 0.2.2.
+3. *Pulled on the user's action, and kept current while the user is looking.* A host asks for context when the user does something that calls for it, and may ask to be told when it changes while it is showing the user what it read. A provider sends nothing a host did not ask for, and a host does not poll.
 4. *It is ordinary MCP.* A provider is an MCP server and the two answers are MCP resources.
 
 ## Status

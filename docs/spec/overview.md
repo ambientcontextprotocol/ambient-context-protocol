@@ -149,5 +149,5 @@ Four principles shape everything else:
 
 1. *The app says where; the host decides what.* A provider reports elements and their positions. It never names what the host draws there.
 2. *A shared language for how a thing is shown, the app's own word for what it is.* Every element has a `role` from a short fixed list (a window, a list, a row, text), which a program can write rules against. What the thing is to the app (a task, a comment, a layer) goes in `subrole` and `attributes`, which the app defines freely. A language model can read any of it, so there is nothing to gain from standardizing "task."
-3. *Pulled on the user's action.* A host asks for context when the user does something that calls for it. A provider does not push, and a host does not poll. Provisional: this holds for version 0.2.2 and may change.
+3. *Pulled on the user's action, and kept current while the user is looking.* A host asks for context when the user does something that calls for it. While it is showing the user what it read, it may ask the provider to say when that changes. A provider sends nothing a host did not ask for, and a host does not poll.
 4. *It is ordinary MCP.* A provider is an MCP server and the two answers are MCP resources. A client that has never heard of this protocol can still list and read them.

@@ -4,9 +4,9 @@
 
 ## 4. Operations
 
-The protocol has two operations. This section defines them apart from any carrier; [section 7](binding.md#7-the-mcp-binding) says how MCP carries them.
+The protocol has three operations: two reads, and a watch on the first of them. This section defines them apart from any carrier; [section 7](binding.md#7-the-mcp-binding) says how MCP carries them.
 
-Both are reads. The host's application code performs them, not the model: the host reads `current` when the user invokes the agent, and reads `locate` when it needs to place something. This is why the MCP binding uses resources, which MCP defines as application-driven, and not tools, which it defines as model-controlled.
+The host's application code performs them, not the model: the host reads `current` when the user invokes the agent, reads `locate` when it needs to place something, and may watch `current` while it is showing the user what it read. This is why the MCP binding uses resources, which MCP defines as application-driven, and not tools, which it defines as model-controlled.
 
 ### 4.1 — current
 
@@ -69,3 +69,17 @@ Rules for a host:
 - `display` is a label for the user. It is not the context: what goes to the agent is the tree, and a host that lets the user inspect what will be sent shows the tree.
 
 The picture a host may draw beside these words is not in the answer. It is a file the app ships ([8.2](discovery.md#82--the-apps-favicon)).
+
+### 4.4 — watch
+
+Asks the provider to say when its answer to `current` changes. Takes no input. It is optional for a provider, and a host works without it.
+
+A host that shows the user what it read ([9.2](security.md#92--for-hosts)) is showing a moment that passes: the user selects something else in the app and the line still names the old selection. `watch` lets the host keep that line true without asking again and again. The provider says only that the answer changed. The host then reads `current` as it always does.
+
+The operation has no result while it lasts. For as long as it is open, the provider sends a notice each time its answer to `current` would differ from the one it last gave to a read or last announced. A notice carries no content: nothing of the tree, nothing of `display`, not what changed. The operation ends when the host ends it, when the provider ends it, or when the connection between them is lost.
+
+**What counts as a change.** Anything that would alter the answer to `current`, `display` included, with one exception: a change in `hovered` alone is not a change. The pointer moves constantly, and a notice for each movement would report the user's attention and little else. A host that wants the pointer's state reads it when the user acts.
+
+**The order of things.** A host reads `current` on the user's action, then opens the watch. If the answer changed between that read and the watch opening, the provider says so as soon as the watch is open, so the host never needs to read twice to be sure.
+
+Rules for a provider are in [9.1](security.md#91--for-providers): it gathers changes into at most one notice in any 250 milliseconds, never drops the last one, and learns of changes from the app's own events. Rules for a host are in [9.2](security.md#92--for-hosts): one watch, on the provider it has just read, only while it is showing that provider's context. How MCP carries the operation is in [7.7](binding.md#77--watching).

@@ -1,10 +1,10 @@
 # Ambient Context Protocol
 
-Version `0.2.1` · Draft of `2026.11.17` · Not stable. Everything here may change, every name is a placeholder, and nothing has shipped.
+Version `0.2.2` · Draft of `2026.11.17` · Not stable. Everything here may change, every name is a placeholder, and nothing has shipped.
 
-> The Ambient Context Protocol lets a desktop app tell an ambient agent what the user is looking at, so that "this" means something when the user asks a question. It also lets the agent's interface appear beside the thing in question. An app answers two questions: what is open and selected, as one tree of elements, and where an element is on screen. Version 0.2.1 is defined as an extension to the Model Context Protocol (MCP): both answers are MCP resources.
+> The Ambient Context Protocol lets a desktop app tell an ambient agent what the user is looking at, so that "this" means something when the user asks a question. It also lets the agent's interface appear beside the thing in question. An app answers two questions: what is open and selected, as one tree of elements, and where an element is on screen. Version 0.2.2 is defined as an extension to the Model Context Protocol (MCP): both answers are MCP resources.
 
-Version 0.2.0 is the result of three accepted proposals: [RFC-0001, the element model](../rfcs/0001-element-model.md), [RFC-0002, a provider on a listener the app already has](../rfcs/0002-shared-listener.md) and [RFC-0003, a hovered state](../rfcs/0003-hovered-state.md). Version 0.2.1 adds one proposal: [RFC-0005, the app's words and favicon for what was read](../rfcs/0005-display-and-favicon.md). Where this specification and an RFC differ, this specification is the contract and the difference is a defect to report.
+Version 0.2.0 is the result of three accepted proposals: [RFC-0001, the element model](../rfcs/0001-element-model.md), [RFC-0002, a provider on a listener the app already has](../rfcs/0002-shared-listener.md) and [RFC-0003, a hovered state](../rfcs/0003-hovered-state.md). Version 0.2.1 adds one proposal: [RFC-0005, the app's words and favicon for what was read](../rfcs/0005-display-and-favicon.md). Version 0.2.2 adds another: [RFC-0006, watching current](../rfcs/0006-watching.md). Where this specification and an RFC differ, this specification is the contract and the difference is a defect to report.
 
 ## Contents
 
@@ -19,4 +19,4 @@ Section numbers run through the whole specification, so "section 8" names the sa
 | [The MCP binding](binding.md) | [7. The MCP binding](binding.md#7-the-mcp-binding): [7.1 the server](binding.md#71--the-server), [7.2 declaring the extension](binding.md#72--declaring-the-extension), [7.3 the two resources](binding.md#73--the-two-resources), [7.4 errors and refusals](binding.md#74--errors-and-refusals), [7.5 an optional tool](binding.md#75--an-optional-tool), [7.6 older MCP clients](binding.md#76--older-mcp-clients) · [11. Implementing a provider](binding.md#11-implementing-a-provider) · [14. MCP details this draft relies on](binding.md#14-mcp-details-this-draft-relies-on) |
 | [Discovery](discovery.md) | [8. Discovery](discovery.md#8-discovery): [8.1 platform profiles](discovery.md#81--platform-profiles), [8.2 the app's favicon](discovery.md#82--the-apps-favicon) |
 | [Rules](security.md) | [9. Rules](security.md#9-rules): [9.1 for providers](security.md#91--for-providers), [9.2 for hosts](security.md#92--for-hosts) |
-| [Versioning](versioning.md) | [10. Versioning](versioning.md#10-versioning) · [12. Not in version 0.2.1](versioning.md#12-not-in-version-021) · [13. Open questions](versioning.md#13-open-questions) · [Changelog](versioning.md#changelog) |
+| [Versioning](versioning.md) | [10. Versioning](versioning.md#10-versioning) · [12. Not in version 0.2.2](versioning.md#12-not-in-version-021) · [13. Open questions](versioning.md#13-open-questions) · [Changelog](versioning.md#changelog) |

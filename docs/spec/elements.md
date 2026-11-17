@@ -1,6 +1,6 @@
 # Ambient Context Protocol · Elements
 
-> Part of the [specification](index.md), version `0.2.1`.
+> Part of the [specification](index.md), version `0.2.2`.
 
 ## 5. Elements
 
@@ -10,7 +10,7 @@ A notes-and-threads app with words selected inside a comment, and a second threa
 
 ```json
 {
-  "protocol": "0.2.1",
+  "protocol": "0.2.2",
   "instance": "k3f9x2",
   "root": {
     "id": "app", "role": "Application", "title": "Example",

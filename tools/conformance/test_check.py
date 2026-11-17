@@ -126,7 +126,7 @@ class CleanProvider(unittest.TestCase):
         self.assertEqual(by_name(results)["endpoint-answers"]["status"], check.FAIL)
 
     def test_the_token_is_not_sent_off_this_machine(self):
-        results = check.run(endpoint="http://192.0.2.1:9/mcp", token="secret-token", timeout=0.5)
+        results = check.run(endpoint="http://192.0.2.2:9/mcp", token="secret-token", timeout=0.5)
         names = by_name(results)
         self.assertEqual(names["endpoint-address"]["status"], check.FAIL)
         self.assertEqual(names["endpoint-answers"]["status"], check.SKIP)
@@ -365,7 +365,7 @@ class CommandLine(unittest.TestCase):
             process.wait(timeout=10)
         self.assertEqual(done.returncode, 1)
         report = json.loads(done.stdout)
-        self.assertEqual(report["protocol"], "0.2.1")
+        self.assertEqual(report["protocol"], "0.2.2")
         self.assertEqual(report["summary"]["fail"], 2)
         failed = {(item["requirement"], item["name"]) for item in report["results"] if item["status"] == "FAIL"}
         self.assertEqual(failed, {("PR-053", "hovered-single"), ("PR-059", "ids-unique")})

@@ -1,8 +1,8 @@
 # Ambient Context for TypeScript
 
-Makes a desktop app built on Node, such as an Electron app, a provider of the Ambient Context Protocol, version 0.2.1: it runs the local server, answers the protocol's requests and keeps the descriptor file a host finds the app by. The app writes one thing, a tree of what the user has open and selected.
+Makes a desktop app built on Node, such as an Electron app, a provider of the Ambient Context Protocol, version 0.2.2: it runs the local server, answers the protocol's requests and keeps the descriptor file a host finds the app by. The app writes one thing, a tree of what the user has open and selected.
 
-Version 0.2.1 is defined by four accepted proposals until the specification is rewritten to match: [the element model](../../docs/rfcs/0001-element-model.md), [the shared listener](../../docs/rfcs/0002-shared-listener.md) [the hovered state](../../docs/rfcs/0003-hovered-state.md) and [display and the favicon](../../docs/rfcs/0005-display-and-favicon.md). Discovery, transport and trust are unchanged from [the 0.1 specification](../../docs/protocol-v0.md), sections 7 and 8.
+Version 0.2.2 is defined by four accepted proposals until the specification is rewritten to match: [the element model](../../docs/rfcs/0001-element-model.md), [the shared listener](../../docs/rfcs/0002-shared-listener.md) [the hovered state](../../docs/rfcs/0003-hovered-state.md) and [display and the favicon](../../docs/rfcs/0005-display-and-favicon.md). Discovery, transport and trust are unchanged from [the 0.1 specification](../../docs/protocol-v0.md), sections 7 and 8.
 
 It uses Node's standard library only and has no dependencies. It is plain TypeScript with no build step: Node 22.18 or later runs the source directly, and a bundler takes it as it is. Like the protocol's discovery, it is for macOS. It began as a port of the [Swift package](../swift/README.md), name for name; that package is still at 0.1, so the two differ until it is carried over.
 

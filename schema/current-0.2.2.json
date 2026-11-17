@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Ambient Context Protocol 0.2.1: the answer to current",
+  "title": "Ambient Context Protocol 0.2.2: the answer to current",
   "description": "What a provider sends when a host reads ambient://current. Specification sections 4.1, 4.3 and 5. Three rules cannot be stated here and are checked separately: every id is unique within the answer, the focused elements form one path down from the root with no gaps, and at most one element is hovered.",
   "type": "object",
   "required": ["protocol", "instance", "root"],
   "additionalProperties": false,
   "properties": {
-    "protocol": { "const": "0.2.1" },
+    "protocol": { "const": "0.2.2" },
     "instance": { "type": "string", "minLength": 1 },
     "display": {
       "type": "object",

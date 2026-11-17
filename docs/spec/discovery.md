@@ -1,10 +1,10 @@
 # Ambient Context Protocol · Discovery
 
-> Part of the [specification](index.md), version `0.2.1`.
+> Part of the [specification](index.md), version `0.2.2`.
 
 ## 8. Discovery
 
-A host has to find the provider for the app in front. Version 0.2.1 defines one way, for apps that can write a file in a folder the user's other apps can read.
+A host has to find the provider for the app in front. Version 0.2.2 defines one way, for apps that can write a file in a folder the user's other apps can read.
 
 A running provider writes one descriptor file and removes it at quit.
 
@@ -13,7 +13,7 @@ A running provider writes one descriptor file and removes it at quit.
 
 ```json
 {
-  "protocol": "0.2.1",
+  "protocol": "0.2.2",
   "app": { "id": "org.example.editor", "name": "Editor", "version": "2.3.0" },
   "pid": 48211,
   "instance": "k3f9x2",
@@ -43,7 +43,7 @@ A provider writes the file after its listener is up, and writes it atomically: t
 4. Read `ambient://current` with the token and a time limit of the host's choosing, without following redirects. Ignore the answer if its `instance` or its `protocol` differs from the descriptor's. On any failure, carry on with no context.
 5. To place something beside an element, read `ambient://location/<id>` from the same provider and instance that issued the id.
 
-**What this defends against, and what it does not.** Keeping the folder and the file to the user keeps other users of the machine out. The token keeps out a program that can reach the port but cannot read the file. The check in step 3 keeps a descriptor from pointing a host at a server run by some other process. None of this defends against a hostile program already running as the user: it can read the token, and it can read the user's documents without this protocol. Version 0.2.1 states that limit and does not try to remove it. The token is also not consent: it shows that a caller can read the user's files, not that the user approved that caller.
+**What this defends against, and what it does not.** Keeping the folder and the file to the user keeps other users of the machine out. The token keeps out a program that can reach the port but cannot read the file. The check in step 3 keeps a descriptor from pointing a host at a server run by some other process. None of this defends against a hostile program already running as the user: it can read the token, and it can read the user's documents without this protocol. Version 0.2.2 states that limit and does not try to remove it. The token is also not consent: it shows that a caller can read the user's files, not that the user approved that caller.
 
 On a listener the app shares with other routes ([7.1](binding.md#71--the-server)), the port may be fixed and so easier to find than a random one. The token and the check in step 3 still hold: a program that takes the port first is not the process the descriptor names. A host checks the address in the descriptor; whether it can also confirm that the socket is bound to loopback only is an open question ([section 13](versioning.md#13-open-questions)).
 
@@ -51,7 +51,7 @@ On a listener the app shares with other routes ([7.1](binding.md#71--the-server)
 
 ### 8.1 · Platform profiles
 
-Sections 8 and 8.2 leave six things to the platform. A profile fixes them. Version 0.2.1 defines one profile, for macOS. A provider or host on a platform that has no profile cannot yet conform to section 8: it must not choose a folder of its own, because two hosts that guess differently would not find each other's providers. A profile for another platform is added by an RFC.
+Sections 8 and 8.2 leave six things to the platform. A profile fixes them. Version 0.2.2 defines one profile, for macOS. A provider or host on a platform that has no profile cannot yet conform to section 8: it must not choose a folder of its own, because two hosts that guess differently would not find each other's providers. A profile for another platform is added by an RFC.
 
 | A profile fixes | macOS |
 |---|---|

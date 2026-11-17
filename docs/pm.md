@@ -2,7 +2,7 @@
 
 Last updated: `2026.11.17`
 
-> A protocol by which a desktop app tells an ambient agent host what the user has open, what they have selected, and where an element is on screen. Version `0.2.1`; requirements are marked with the versions they hold in. First provider: Paper. First host: Sirius. Task: SIR-0105.
+> A protocol by which a desktop app tells an ambient agent host what the user has open, what they have selected, and where an element is on screen. Version `0.2.2`; requirements are marked with the versions they hold in. First provider: Paper. First host: Sirius. Task: SIR-0105.
 
 **Status.** Draft for Andrew's review. Nothing here is in the graph. The structure uses the product ontology as edited on 2026.11.09 (Domain, Feature, Requirement, Verification; the Product level is left out because this repository holds one product). The requirements restate the design in the [plan](../../paper/.plan/ambient-context-provider.md) and the [protocol draft](spec/index.md); most of their wording is Claude's and unconfirmed. All method, field and path names are placeholders.
 
@@ -102,6 +102,13 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 | **PR-072** — Current as a tree, with display | On request, a provider returns in one response an object with `protocol`, `instance` and `root`, optionally `display`, and nothing else. `root` is one tree of elements holding everything the provider reports. Replaces PR-047. | Provider | P0 | — | 0.2.1 | — | [0005](rfcs/0005-display-and-favicon.md) |
 | **PR-074** — Display shape | `display`, when sent, is an object. Its `title` and `detail`, when sent, are strings of plain text on one line, each of 80 characters or fewer. | Provider | P0 | — | 0.2.1 | — | [0005](rfcs/0005-display-and-favicon.md) |
 | **PR-075** — Display says no more than the tree | `display` describes the same moment and the same tree as the answer it is in. It holds no content the provider does not report as an element and names nothing from an element the provider left out. | Provider | P0 | — | 0.2.1 | — | [0005](rfcs/0005-display-and-favicon.md) |
+| **PR-080** — Watch offered | A provider that offers `watch` declares `"resources": {"subscribe": true}` and answers `subscriptions/listen` whose `resourceSubscriptions` names `ambient://current` with an event stream. The first message on it is `notifications/subscriptions/acknowledged`, naming that address and no other. | Provider | P1 | — | 0.2.2 | — | [0006](rfcs/0006-watching.md) |
+| **PR-081** — Watch not offered | A provider that does not offer `watch` declares no `subscribe` and answers `subscriptions/listen` as a method it does not implement: HTTP `404` with error `-32601`. | Provider | P0 | — | 0.2.2 | — | [0006](rfcs/0006-watching.md) |
+| **PR-082** — Notice shape | A notice is `notifications/resources/updated` with `uri` `ambient://current` and the subscription id, and nothing from the app. A provider sends no notification type or address the host did not ask for. | Provider | P0 | — | 0.2.2 | — | [0006](rfcs/0006-watching.md) |
+| **PR-083** — Notices are coalesced | A provider sends at most one notice in any 250 milliseconds on one watch, and the last change always produces a notice. | Provider | P0 | — | 0.2.2 | — | [0006](rfcs/0006-watching.md) |
+| **PR-084** — Hover alone is no change | A change in `hovered` alone produces no notice. Any other change to the answer to `current`, `display` included, does. | Provider | P0 | — | 0.2.2 | — | [0006](rfcs/0006-watching.md) |
+| **PR-085** — Quiet watches are kept alive | On a watch with nothing to say, a provider sends an SSE comment line at least every 15 seconds. | Provider | P1 | — | 0.2.2 | — | [0006](rfcs/0006-watching.md) |
+| **PR-086** — Watches end with the provider | A provider ends every watch when it quits and when the user turns it off. It may limit the watches it holds at once, to no fewer than four, and may end any watch at any time. | Provider | P0 | — | 0.2.2 | — | [0006](rfcs/0006-watching.md) |
 
 **F-CX2 — Content** · P0. An item carries its content in a form any agent can read.
 
@@ -209,7 +216,8 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 | **PR-066** — Declared version, three places | A provider gives the same version, `0.2.0`, in the MCP extension `"io.github.ambientcontextprotocol/context": {"version": "0.2.0"}`, in the descriptor and in the `current` answer. Replaces PR-027. | Provider | P0 | — | 0.2.0 | 0.2.0 | [0001](rfcs/0001-element-model.md) |
 | **PR-067** — Version agreement | Before 1.0 a host and a provider work together only if they agree on the major and minor parts of the version. A patch version only adds. | Both | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
 | **PR-068** — Unknown role | A receiver treats a role it does not know as `Group`. | Both | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
-| **PR-073** — Declared version, three places | A provider gives the same version, `0.2.1`, in the MCP extension `"io.github.ambientcontextprotocol/context": {"version": "0.2.1"}`, in the descriptor and in the `current` answer. Replaces PR-066. | Provider | P0 | — | 0.2.1 | — | [0005](rfcs/0005-display-and-favicon.md) |
+| **PR-092** — Declared version, three places | A provider gives the same version, `0.2.2`, in the MCP extension `"io.github.ambientcontextprotocol/context": {"version": "0.2.2"}`, in the descriptor and in the `current` answer. Replaces PR-073. | Provider | P0 | — | 0.2.2 | — | [0006](rfcs/0006-watching.md) |
+| **PR-073** — Declared version, three places | A provider gives the same version, `0.2.1`, in the MCP extension `"io.github.ambientcontextprotocol/context": {"version": "0.2.1"}`, in the descriptor and in the `current` answer. Replaces PR-066. | Provider | P0 | — | 0.2.1 | 0.2.1 | [0005](rfcs/0005-display-and-favicon.md) |
 
 ### 3.7 — Security
 
@@ -223,6 +231,7 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 | **PR-034** — Token lifetime | A provider mints a new token at each launch and stores it nowhere but the descriptor. | Provider | P0 | — | 0.1 | — | — |
 | **PR-069** — Token for this endpoint only | The token is not a credential the app's server accepts anywhere else. | Provider | P0 | — | 0.2.0 | — | [0002](rfcs/0002-shared-listener.md) |
 | **PR-070** — Nothing in logs | A provider writes neither its token nor anything from an answer to a log. | Provider | P0 | — | 0.2.0 | — | [0002](rfcs/0002-shared-listener.md) |
+| **PR-087** — Watch behind the same checks | The watch request is refused without the token (`401`) and with an `Origin` header (`403`) before any stream opens. | Provider | P0 | — | 0.2.2 | — | [0006](rfcs/0006-watching.md) |
 
 ### 3.8 — Host
 
@@ -230,7 +239,7 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 
 | Requirement | Statement | On | Priority | Verified by | Since | Until | RFC |
 |---|---|---|---|---|---|---|---|
-| **PR-035** — User action | A host requests context only in response to an action by the user. | Host | P0 | — | 0.1 | — | — |
+| **PR-035** — User action | A host requests context only in response to an action by the user. | Host | P0 | — | 0.1 | 0.2.1 | — |
 | **PR-036** — Shown and removable | Before context is sent to an agent, the host shows the user what will be sent and lets them remove it. | Host | P0 | — | 0.1 | — | — |
 | **PR-045** — Removed means removed | If the user removes context, or sends the message, while a provider's answer is still on its way, the host discards the late answer. | Host | P0 | V-018 | 0.1 | — | — |
 
@@ -244,6 +253,10 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 | **PR-071** — Hover is weaker | A host presents `hovered` to an agent as where the pointer is, distinct from and weaker than `selected`, and sends no more of an element's content because it is hovered. | Host | P0 | — | 0.2.0 | — | [0003](rfcs/0003-hovered-state.md) |
 | **PR-076** — Display read leniently | A host uses `display` only when its `title` is a non-empty string. It reads a `display` that is not an object, or a `title` or `detail` that is not a string, as absent, and never refuses an answer because of it. | Host | P0 | — | 0.2.1 | — | [0005](rfcs/0005-display-and-favicon.md) |
 | **PR-077** — Display drawn as plain text | A host draws `display` as plain text on one line, cut to a length of its choosing, with control characters removed and no markup or links interpreted. It remains a label: the user can still remove the context it names. | Host | P0 | — | 0.2.1 | — | [0005](rfcs/0005-display-and-favicon.md) |
+| **PR-088** — Read on an action or a notice | A host reads `current` only in response to an action by the user or to a notice on a watch it holds. Replaces PR-035. | Host | P0 | — | 0.2.2 | — | [0006](rfcs/0006-watching.md) |
+| **PR-089** — One watch, in view | A host opens a watch only on the provider it has just read on the user's action, and only while it is showing the user that provider's context. It holds one at a time and ends it when the message is sent, the context is removed or its interface closes. | Host | P0 | — | 0.2.2 | — | [0006](rfcs/0006-watching.md) |
+| **PR-090** — A notice is not context | A host learns the new state only by reading `current`, with every check a read has. It never has two reads outstanding: a notice that arrives during a read causes one more read after it. | Host | P0 | — | 0.2.2 | — | [0006](rfcs/0006-watching.md) |
+| **PR-091** — A lost watch is silence | When a watch's stream ends or fails, a host carries on with what it last read, shows the user no error, and tries to open the watch again at most once. It still reads at send. | Host | P0 | — | 0.2.2 | — | [0006](rfcs/0006-watching.md) |
 
 ---
 
@@ -278,6 +291,8 @@ Each Verification checks one Requirement; a Requirement may have several. The "P
 ---
 
 ## 5. Coverage
+
+*Version 0.2.2.* 81 Requirements hold: RFC-0006 retired PR-035 and PR-073 and added PR-080 to PR-092, for watching `current`.
 
 *Version 0.2.1.* 70 Requirements hold, 63 of them at P0: RFC-0005 retired PR-047 and PR-066 and added PR-072 to PR-079, of which the outside check covers PR-072, PR-073 and PR-074 and the schema is `schema/current-0.2.1.json`.
 

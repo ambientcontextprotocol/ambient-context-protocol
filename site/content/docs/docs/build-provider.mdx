@@ -51,7 +51,7 @@ List the protocol under `capabilities.extensions` in your `server/discover` resu
   "capabilities": {
     "resources": {},
     "extensions": {
-      "io.github.ambientcontextprotocol/context": { "version": "0.2.1" }
+      "io.github.ambientcontextprotocol/context": { "version": "0.2.2" }
     }
   },
   "_meta": {
@@ -102,11 +102,11 @@ To clients that use the `initialize` handshake, declare it under `capabilities.e
 <Step>
 ### Write the descriptor file
 
-After the listener is up, write one file into the platform's descriptor folder, named `<app-id>.<pid>.json`. On macOS, the only platform with a profile in 0.2.1, the folder is the one below and the app's identifier is its bundle identifier. Write it to a temporary name in the same folder and rename it into place, so a host never reads half a file. Remove it when the app quits, and at launch remove any descriptor left by an earlier run that did not exit cleanly.
+After the listener is up, write one file into the platform's descriptor folder, named `<app-id>.<pid>.json`. On macOS, the only platform with a profile in 0.2.2, the folder is the one below and the app's identifier is its bundle identifier. Write it to a temporary name in the same folder and rename it into place, so a host never reads half a file. Remove it when the app quits, and at launch remove any descriptor left by an earlier run that did not exit cleanly.
 
 ```json title="~/Library/Application Support/AmbientContext/providers/org.example.editor.48211.json"
 {
-  "protocol": "0.2.1",
+  "protocol": "0.2.2",
   "app": { "id": "org.example.editor", "name": "Editor", "version": "2.3.0" },
   "pid": 48211,
   "instance": "k3f9x2",
@@ -203,7 +203,7 @@ Decoded, the text is one tree of elements rooted at the app:
 
 ```json title="The text, decoded"
 {
-  "protocol": "0.2.1",
+  "protocol": "0.2.2",
   "instance": "k3f9x2",
   "root": {
     "id": "app", "role": "Application", "title": "Editor",
@@ -225,7 +225,7 @@ Decoded, the text is one tree of elements rooted at the app:
 }
 ```
 
-Build the tree of what is open, mint an id for each element, and mark what is selected, focused and, if your app tracks the pointer, hovered. `protocol` and `instance` are the same values as in the descriptor. [Concepts](/docs/concepts) explains roles and states, and the answer's shape is also published as a JSON Schema, `schema/current-0.2.1.json` in the repository.
+Build the tree of what is open, mint an id for each element, and mark what is selected, focused and, if your app tracks the pointer, hovered. `protocol` and `instance` are the same values as in the descriptor. [Concepts](/docs/concepts) explains roles and states, and the answer's shape is also published as a JSON Schema, `schema/current-0.2.2.json` in the repository.
 
 Answer from state you already hold in memory, without waiting on disk or network. A host sets its own time limit and carries on without context if you miss it.
 

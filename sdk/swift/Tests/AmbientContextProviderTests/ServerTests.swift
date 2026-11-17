@@ -164,7 +164,7 @@ struct ContextServerTests {
         let capabilities = try #require(result["capabilities"] as? [String: Any])
         #expect(capabilities["resources"] is [String: Any])
         let extensions = try #require(capabilities["extensions"] as? [String: [String: String]])
-        #expect(extensions["io.github.ambientcontextprotocol/context"] == ["version": "0.2.1"])
+        #expect(extensions["io.github.ambientcontextprotocol/context"] == ["version": "0.2.2"])
         let meta = try #require(result["_meta"] as? [String: [String: String]])
         #expect(meta["io.modelcontextprotocol/serverInfo"] == ["name": "Editor", "version": "2.3.0"])
     }
@@ -187,7 +187,7 @@ struct ContextServerTests {
         let current = try document(await responder.respond(to: request("resources/read", params: ["uri": uri])), uri: uri)
         // These three and no display: this provider words nothing.
         #expect(Set(current.keys) == ["protocol", "instance", "root"])
-        #expect(current["protocol"] as? String == "0.2.1")
+        #expect(current["protocol"] as? String == "0.2.2")
         #expect(current["instance"] as? String == "k3f9x2")
 
         let root = try #require(current["root"] as? [String: Any])
@@ -627,7 +627,7 @@ struct ContextServerTests {
 
     private func descriptor(pid: Int32) -> ContextDescriptor {
         ContextDescriptor(
-            protocol: "0.2.1", app: .init(id: "org.example.editor", name: "Editor", version: "2.3.0"),
+            protocol: "0.2.2", app: .init(id: "org.example.editor", name: "Editor", version: "2.3.0"),
             pid: pid, instance: "k3f9x2", endpoint: "http://127.0.0.1:53124/mcp", token: "secret",
             started: "2026-11-09T21:14:03Z"
         )
@@ -648,7 +648,7 @@ struct ContextServerTests {
 
         let written = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
         #expect(Set(written.keys) == ["protocol", "app", "pid", "instance", "endpoint", "token", "started"])
-        #expect(written["protocol"] as? String == "0.2.1")
+        #expect(written["protocol"] as? String == "0.2.2")
         #expect(written["pid"] as? Int == 48211)
         #expect(written["endpoint"] as? String == "http://127.0.0.1:53124/mcp")
         #expect(written["app"] as? [String: String] == ["id": "org.example.editor", "name": "Editor", "version": "2.3.0"])

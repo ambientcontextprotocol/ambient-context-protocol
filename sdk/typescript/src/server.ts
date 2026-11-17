@@ -9,7 +9,7 @@ import type { ContextContent, ContextDisplay, ContextElement, ContextLocation, C
 import { ContextTree } from "./tree.ts";
 import type { ContextIssue } from "./tree.ts";
 
-// A provider for the Ambient Context Protocol, version 0.2.1: a small MCP
+// A provider for the Ambient Context Protocol, version 0.2.2: a small MCP
 // server on the loopback interface that answers `current` and `locate`
 // as two resources, and the descriptor file that tells a host where it
 // is. It is handed a `ContextProvider` and knows nothing else about the
@@ -304,7 +304,7 @@ export interface ContextResponderOptions {
  * belongs in a log.
  */
 export class ContextResponder {
-  static readonly protocolVersion = "0.2.1";
+  static readonly protocolVersion = "0.2.2";
   static readonly extensionID = "io.github.ambientcontextprotocol/context";
   /** The path used when none is given. */
   static readonly endpointPath = "/mcp";

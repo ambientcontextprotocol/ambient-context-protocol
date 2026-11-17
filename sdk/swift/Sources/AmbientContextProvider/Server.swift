@@ -1,7 +1,7 @@
 import Foundation
 import Network
 
-// A provider for the Ambient Context Protocol, version 0.2.1: a small
+// A provider for the Ambient Context Protocol, version 0.2.2: a small
 // MCP server on the loopback interface that answers `current` and
 // `locate` as two resources, and the descriptor file that tells a host
 // where it is. It is handed a `ContextProvider` and knows nothing else
@@ -174,7 +174,7 @@ public enum ContextCheck: Sendable {
 public struct ContextResponder: Sendable {
     typealias App = ContextApp
 
-    public static let protocolVersion = "0.2.1"
+    public static let protocolVersion = "0.2.2"
     public static let extensionID = "io.github.ambientcontextprotocol/context"
     /// The path `ContextServer` listens on, and the default.
     public static let endpointPath = "/mcp"

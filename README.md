@@ -4,7 +4,7 @@
 
 > A way for a desktop app to tell an agent what you have open, what you have selected, and where it is on screen.
 
-**Draft 0.2.1.** The specification is written to 0.2.1; the packages and the first apps are moving to it and still exchange 0.1. Every name below may change.
+**Draft 0.2.2.** The specification is written to 0.2.2; the packages and the first apps are moving to it and still exchange 0.1. Every name below may change.
 
 ## What it is
 
@@ -18,7 +18,7 @@ A provider answers two questions.
 
 ```json
 {
-  "protocol": "0.2.1",
+  "protocol": "0.2.2",
   "instance": "k3f9x2",
   "root": {
     "id": "app", "role": "Application", "title": "Editor",
@@ -59,14 +59,14 @@ A running provider announces itself with a descriptor file that only the user ca
 
 1. *The app says where; the host decides what.* A provider reports elements and their positions. It never names what the host draws there.
 2. *A shared language for how a thing is shown, the app's own word for what it is.* Thirteen roles every app shares; the subrole and attributes are the app's to define.
-3. *Pulled on the user's action.* A host asks for context when the user does something that calls for it. Provisional in 0.2.1.
+3. *Pulled on the user's action.* A host asks for context when the user does something that calls for it. Provisional in 0.2.2.
 4. *It is ordinary MCP.* A provider is an MCP server and the two answers are MCP resources.
 
 ## Status
 
 | | |
 |---|---|
-| Specification | [Draft 0.2.1](docs/spec/index.md) |
+| Specification | [Draft 0.2.2](docs/spec/index.md) |
 | First provider | [Paper](https://github.com/humanitas-labs/paper), a Markdown editor for macOS. Planned. |
 | First host | Sirius. Planned. |
 | Platforms | macOS first |
@@ -74,7 +74,7 @@ A running provider announces itself with a descriptor file that only the user ca
 ## In this repository
 
 - [`docs/pm.md`](docs/pm.md): the product model. Domains, Features, Requirements and how each is verified.
-- [`docs/spec/`](docs/spec/index.md): the protocol, draft 0.2.1. Operations, elements, locations, the MCP binding and discovery.
-- [`schema/`](schema/current-0.2.1.json): a JSON Schema for the answer to "what is open", and `tools/` with the checks that go with it.
-- [`docs/rfcs/`](docs/rfcs/README.md): how the protocol changes, and the accepted proposals behind 0.2.1.
+- [`docs/spec/`](docs/spec/index.md): the protocol, draft 0.2.2. Operations, elements, locations, the MCP binding and discovery.
+- [`schema/`](schema/current-0.2.2.json): a JSON Schema for the answer to "what is open", and `tools/` with the checks that go with it.
+- [`docs/rfcs/`](docs/rfcs/README.md): how the protocol changes, and the accepted proposals behind 0.2.2.
 - [`sdk/swift`](sdk/swift/README.md): a Swift package that makes a macOS app a provider. The app says what is open and selected; the package does the rest.

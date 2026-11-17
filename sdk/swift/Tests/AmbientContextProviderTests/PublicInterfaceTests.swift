@@ -104,7 +104,7 @@ struct PublicInterfaceTests {
 
         let current = try document(try await call(descriptor, "resources/read", uri: "ambient://current"))
         #expect(current["instance"] as? String == descriptor.instance)
-        #expect(current["protocol"] as? String == "0.2.1")
+        #expect(current["protocol"] as? String == "0.2.2")
         let root = try #require(current["root"] as? [String: Any])
         #expect(root["title"] as? String == "Notes")
         #expect((root["children"] as? [[String: Any]])?.first?["title"] as? String == "Groceries")

@@ -1,6 +1,6 @@
 # The outside check
 
-> A script that tests any running Ambient Context Protocol provider from outside, and a fake provider for testing a host. Both are for version `0.2.1` and need only Python 3 and its standard library.
+> A script that tests any running Ambient Context Protocol provider from outside, and a fake provider for testing a host. Both are for version `0.2.2` and need only Python 3 and its standard library.
 
 ## What it is
 
@@ -47,13 +47,13 @@ The token is sent only to this machine. If a descriptor's endpoint names any oth
 
 ## What it checks
 
-- *The descriptor,* when a path is given: the seven fields, the file's name, mode `0600` on the file and `0700` on its folder, a running process, protocol `0.2.1`, an endpoint at `127.0.0.1` with a path and no query or fragment (PR-017, PR-018, PR-019, PR-020, PR-028, PR-031, PR-062).
+- *The descriptor,* when a path is given: the seven fields, the file's name, mode `0600` on the file and `0700` on its folder, a running process, protocol `0.2.2`, an endpoint at `127.0.0.1` with a path and no query or fragment (PR-017, PR-018, PR-019, PR-020, PR-028, PR-031, PR-062).
 - *Refusals:* no token and a wrong token get `401`; any `Origin` header gets `403` with no body, before the token is judged and on `OPTIONS` too; a method other than `POST` gets `405`; an oversized request gets `413`; no response carries an `Access-Control-Allow-*` header (PR-032, PR-033, PR-063, PR-065).
 - *MCP's request rules:* a body that is not a request, a missing `protocolVersion` or `clientCapabilities`, headers that are missing or disagree with the body, an unknown method and an unknown MCP version each get the status and error code in section 7.4 (PR-026, PR-064, PR-065).
-- *Declaring and listing:* `server/discover` names MCP `2026-07-28` and declares the extension with version `0.2.1`; `resources/list` lists `ambient://current`; `resources/templates/list` answers; reading `ambient://current` returns one `application/json` entry (PR-024, PR-026, PR-073).
-- *The answer:* `protocol`, `instance` and `root`, optionally `display`, and nothing else; the protocol is `0.2.1` and the instance is the descriptor's; a `display` that is sent is an object whose `title` and `detail` are each a string on one line of at most 80 characters; every element has the fields, types, id form, role and content blocks that [`schema/current-0.2.1.json`](../../schema/current-0.2.1.json) requires; and the three rules the schema cannot state: ids are unique, the focused elements form one unbroken path, and at most one element is hovered (PR-005, PR-040, PR-072, PR-048, PR-049, PR-050, PR-051, PR-053, PR-059, PR-073).
+- *Declaring and listing:* `server/discover` names MCP `2026-07-28` and declares the extension with version `0.2.2`; `resources/list` lists `ambient://current`; `resources/templates/list` answers; reading `ambient://current` returns one `application/json` entry (PR-024, PR-026, PR-092).
+- *The answer:* `protocol`, `instance` and `root`, optionally `display`, and nothing else; the protocol is `0.2.2` and the instance is the descriptor's; a `display` that is sent is an object whose `title` and `detail` are each a string on one line of at most 80 characters; every element has the fields, types, id form, role and content blocks that [`schema/current-0.2.2.json`](../../schema/current-0.2.2.json) requires; and the three rules the schema cannot state: ids are unique, the focused elements form one unbroken path, and at most one element is hovered (PR-005, PR-040, PR-072, PR-048, PR-049, PR-050, PR-051, PR-053, PR-059, PR-092).
 - *Locations,* when the provider offers them: each id in the answer gets a well-formed location or the "cannot place" error, and an id never issued gets the error (PR-011, PR-060).
-- *Older clients:* `ping` is answered, the `initialize` handshake is answered and declares the extension under `capabilities.experimental`, and a client that sends nothing in `_meta` can list and read (PR-025, PR-026, PR-073). A provider that offers neither `ping` nor the handshake is warned, not failed.
+- *Older clients:* `ping` is answered, the `initialize` handshake is answered and declares the extension under `capabilities.experimental`, and a client that sends nothing in `_meta` can list and read (PR-025, PR-026, PR-092). A provider that offers neither `ping` nor the handshake is warned, not failed.
 
 The tree is validated by hand in `check.py`, so that the check needs no package. `tools/check-schema.py` validates the specification's examples against the schema itself and needs `jsonschema`.
 

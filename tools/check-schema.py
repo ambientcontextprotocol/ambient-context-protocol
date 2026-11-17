@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check schema/current-0.2.1.json against the specification's own examples.
+"""Check schema/current-0.2.2.json against the specification's own examples.
 
 Every `current` answer shown in docs/spec and README.md must validate, and
 a set of wrong answers, a 0.1 answer among them, must not. The examples
@@ -15,12 +15,12 @@ import sys
 
 from jsonschema import Draft202012Validator
 
-schema = json.load(open("schema/current-0.2.1.json"))
+schema = json.load(open("schema/current-0.2.2.json"))
 Draft202012Validator.check_schema(schema)
 validator = Draft202012Validator(schema)
 
 examples = []
-for path in ["README.md", "docs/spec/overview.md", "docs/spec/elements.md", "docs/rfcs/0005-display-and-favicon.md"]:
+for path in ["README.md", "docs/spec/overview.md", "docs/spec/elements.md"]:
     for block in re.findall(r"```json\n(.*?)```", open(path).read(), re.S):
         try:
             value = json.loads(block)
@@ -68,6 +68,7 @@ wrong = {
     "focused sent as false": changed(lambda v: first_child(v).update(focused=False)),
     "a text block with no text": changed(lambda v: first_child(v).update(content=[{"type": "text"}])),
     "protocol 0.2.0": changed(lambda v: v.update(protocol="0.2.0")),
+    "protocol 0.2.1": changed(lambda v: v.update(protocol="0.2.1")),
     "a display that is a string": changed(lambda v: v.update(display="draft.md")),
     "a display title that is a number": changed(lambda v: v.update(display={"title": 3})),
     "a display detail over two lines": changed(lambda v: v.update(display={"title": "draft.md", "detail": "lines\n12"})),

@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import Observation
 
 // A provider for the Ambient Context Protocol, version 0.2.2: a small
 // MCP server on the loopback interface that answers `current` and
@@ -759,6 +760,10 @@ public final class ContextServer {
     /// changed. Not from a timer, and not for the pointer moving, which
     /// is not a change a watch reports.
     ///
+    /// An app whose `current()` reads `@Observable` state need not call
+    /// it for that state: the server observes what the provider reads.
+    /// It is for everything else, such as a text view's selection.
+    ///
     /// It costs nothing when no host is watching, and may be called as
     /// often as the app likes and from any thread: calls are gathered
     /// into at most one notice in 250 milliseconds, the last change
@@ -807,7 +812,19 @@ public final class ContextServer {
         )
         // One turn on the main actor for both, so the words describe the
         // tree they are sent with.
-        responder.answer = { await MainActor.run { (provider.current(), provider.display()) } }
+        // Whatever `@Observable` state the provider reads to answer is
+        // observed as it is read, so a change to it is a change the
+        // server hears of without the app calling `contextDidChange()`.
+        let watches = watches
+        responder.answer = {
+            await MainActor.run {
+                withObservationTracking {
+                    (provider.current(), provider.display())
+                } onChange: {
+                    watches.changed()
+                }
+            }
+        }
         responder.watches = watches
         let answering = responder
         watches.signature = { await answering.signature() }

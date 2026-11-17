@@ -30,6 +30,23 @@ struct WatchTests {
         }
     }
 
+    @Observable
+    final class Model {
+        var selected = "Eggs"
+        var pointer = 0
+    }
+
+    /// An app whose state is observable, as a SwiftUI app's is.
+    final class Notes: ContextProvider, @unchecked Sendable {
+        let model = Model()
+
+        func current() -> ContextElement {
+            ContextElement(id: "app", role: .application, title: "Notes", children: [
+                ContextElement(id: "note", role: .document, title: model.selected, focused: true),
+            ])
+        }
+    }
+
     /// What a host holds of one watch: the bytes that have arrived, and
     /// whether the provider closed the stream.
     final class Stream: @unchecked Sendable {
@@ -95,7 +112,7 @@ struct WatchTests {
 
     private static let subscription = "io.modelcontextprotocol/subscriptionId"
 
-    private func started(_ provider: Editor, keepAlive: TimeInterval = 10) async throws -> ContextServer {
+    private func started(_ provider: any ContextProvider, keepAlive: TimeInterval = 10) async throws -> ContextServer {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("acp-\(UUID().uuidString)", isDirectory: true)
         let server = ContextServer(
@@ -364,6 +381,26 @@ struct WatchTests {
         server.contextDidChange()
         try await settle()
         #expect(stream.notices.count <= 3)
+    }
+
+    @Test
+    func observableStateTheAnswerReadsIsWatchedWithoutACall() async throws {
+        let notes = Notes()
+        let server = try await started(notes)
+        defer { server.stop() }
+        _ = try await call(server, "resources/read", uri: "ambient://current")
+        let stream = try open(server)
+        try await watching(server, stream)
+
+        notes.model.selected = "Rice"
+        try await wait { stream.notices.count == 1 }
+        // State the answer does not read is not a change.
+        notes.model.pointer = 4
+        try await settle()
+        #expect(stream.notices.count == 1)
+        // And it is observed again after each look.
+        notes.model.selected = "Tea"
+        try await wait { stream.notices.count == 2 }
     }
 
     @Test

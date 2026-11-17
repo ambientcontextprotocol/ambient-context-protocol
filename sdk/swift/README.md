@@ -100,6 +100,8 @@ NotificationCenter.default.addObserver(
 ) { _ in server.contextDidChange() }
 ```
 
+An app whose `current()` reads `@Observable` state needs no call for that state: the server observes what the provider reads while answering, and hears of a change to it by itself. The call is for what observation does not see, such as an AppKit text view's selection.
+
 Call it from the app's own events, never from a timer, and not for the pointer moving: a change in `hovered` alone is not told. It may be called as often as the app likes and from any thread. It does nothing when no host is watching. Otherwise the server gathers calls into at most one notice in 250 milliseconds, always tells the last change, and compares the new answer with the last one so that a call after which nothing differs tells nothing. The server keeps quiet watches alive, holds at most eight, and ends them all at `stop()`.
 
 A `ContextResponder` mounted on the app's own server does not offer `watch` yet: it answers one request with one response, and a watch is a response that stays open.

@@ -19,7 +19,7 @@ A location is the answer to "where is this element on screen?" It has the same s
 
 **Rectangles.** A list, because some elements are not one rectangle: a text selection that wraps has one per line. Most elements send a list of one.
 
-**Coordinates.** Version 0.2.0 is specified for macOS. Rectangles are in global display coordinates, in points, with the origin at the top-left corner of the primary display and y increasing downward. This is the space the macOS Accessibility API and Core Graphics use. AppKit's own coordinates have a bottom-left origin and must be converted.
+**Coordinates.** Rectangles are in the platform's global display coordinates, the space in which a host places its own windows. The platform's profile defines that space, its unit and its origin ([8.1](discovery.md#81--platform-profiles)).
 
 **Hints.** `avoid` and `edge` are requests. A host should honor them when it can and may ignore them.
 

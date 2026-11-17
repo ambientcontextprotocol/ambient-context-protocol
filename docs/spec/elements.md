@@ -63,9 +63,9 @@ A role is one of the following thirteen words, spelled as shown.
 | Pictures and pages | `Image`, `Page` |
 | Added by this protocol | `Document` |
 
-Eleven are role names from Apple's Accessibility. `Text` stands for its three text roles, and `Document` is this protocol's own. Two roles are kept apart only where an agent or a host would act differently on seeing one or the other. A provider whose platform has more roles reports the nearest of these:
+The roles are this protocol's own and mean the same on every platform. Eleven of the names are taken from Apple's Accessibility roles; `Text` stands for its three text roles, and `Document` is new here. Two roles are kept apart only where an agent or a host would act differently on seeing one or the other. A provider whose platform has more roles reports the nearest of these. The examples below use Apple's role names, and a provider on another platform maps its own roles in the same way:
 
-| Role | Also covers, from Apple's list |
+| Role | Also covers |
 |---|---|
 | `Window` | Sheet, Drawer, Popover, TabGroup. A tab or pane says so in the subrole. |
 | `Document` | WebArea |

@@ -85,7 +85,7 @@ await server.start();   // when the user turns the feature on
 server.stop();          // when they turn it off, and when the app is about to quit
 ```
 
-`start()` returns a promise that resolves once the listener is up and the descriptor is written; `endpoint`, `token`, `instance` and `isRunning` say what is running. `app.id` is the app's bundle identifier, which the caller supplies: an Electron app in development runs under Electron's bundle and not its own. A third option, `directory`, puts the descriptor somewhere other than `ContextDescriptor.defaultDirectory`, for tests.
+`start()` returns a promise that resolves once the listener is up and the descriptor is written; `endpoint`, `token`, `instance` and `isRunning` say what is running. `app.id` is the app's identifier on its platform (on macOS, its bundle identifier), which the caller supplies: an Electron app in development runs under Electron's bundle and not its own. A third option, `directory`, puts the descriptor somewhere other than `ContextDescriptor.defaultDirectory`, for tests.
 
 Three things an app should do around it:
 

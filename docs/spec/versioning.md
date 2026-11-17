@@ -24,7 +24,7 @@ Every change to this specification that alters behavior goes through the [RFC pr
 - **One program answering for another.** A provider answered by a different process than the app, such as a browser extension's helper.
 - **A provider with no token.**
 - **Discovery for sandboxed and web apps.** See the end of section 8.
-- **Other platforms.** Coordinates and the descriptor folder are defined for macOS only.
+- **Profiles for other platforms.** Version 0.2.0 defines the macOS profile only ([8.1](discovery.md#81--platform-profiles)).
 
 ## 13. Open questions
 
@@ -34,13 +34,13 @@ Every change to this specification that alters behavior goes through the [RFC pr
 4. Web apps: the page knows where an element is in the page, and only the browser knows where the page is on screen. Either the browser is the provider or something bridges the two.
 5. The token in a file is not MCP's own authorization scheme, which is built on OAuth. MCP makes authorization optional and allows other strategies, so this is permitted, but it is not conformance with that scheme. Whether a local provider should offer it as well.
 6. The final names: the extension identifier, the `ambient` address scheme, the descriptor folder and the protocol itself.
-7. Which discovery mechanism a sandboxed Mac app can use, and whether dial-in is needed for it or only for web pages.
-8. Windows and Linux: the descriptor folder, the process checks in section 8 and the coordinate space are all defined for macOS only. Version 0.2.0 is a macOS profile, not yet a cross-platform protocol. The role names are Apple's, and other platforms use different words for some of them.
+7. Which discovery mechanism a sandboxed app can use, and whether dial-in is needed for it or only for web pages.
+8. The profiles for Windows and Linux: the descriptor folder, how it is kept to the user, the app's identifier, how a host makes the process checks in section 8, and the coordinate space. To be written with the first provider and host on each. Whether the role names, eleven of which are Apple's, read well to implementers on platforms that use other words for some of them.
 9. Whether a host can confirm, from the process id and port, that a provider's socket is bound to loopback only, and whether discovery should require it.
 10. Whether a provider should report `hovered` only once the pointer has rested for a moment. The current answer is no: the provider reports the fact and the host decides its weight.
 11. Whether a touch-and-hold on a device with no pointer deserves the same state.
 
 ## Changelog
 
-- `0.2.0` · `2026.11.10` · Breaking. The flat list of items and the `focus` list are replaced by one tree of elements rooted at the app: thirteen roles, an optional `subrole`, and the states `selected`, `focused`, `visible` and `hovered` stated on the element (RFC-0001, RFC-0003). `type`, `parent`, `locatable`, `payload` and the answer's `app`, `items` and `focus` are removed; `attributes` replaces `payload`, and the answer carries `protocol`. A provider may serve the endpoint at a path of its own on a listener the app already has (RFC-0002). The version has three parts. Corrections to match what the packages do: `ping`, the order of the `Origin` and token checks, the `405`, `413` and `-32020` refusals, a request that names no MCP version, and how the extension is declared to older clients. The extension id is `io.github.ambientcontextprotocol/context`; `0.1` used `org.humanitas/ambient-context`.
+- `0.2.0` · `2026.11.10` · Breaking. The flat list of items and the `focus` list are replaced by one tree of elements rooted at the app: thirteen roles, an optional `subrole`, and the states `selected`, `focused`, `visible` and `hovered` stated on the element (RFC-0001, RFC-0003). `type`, `parent`, `locatable`, `payload` and the answer's `app`, `items` and `focus` are removed; `attributes` replaces `payload`, and the answer carries `protocol`. A provider may serve the endpoint at a path of its own on a listener the app already has (RFC-0002). The version has three parts. Corrections to match what the packages do: `ping`, the order of the `Origin` and token checks, the `405`, `413` and `-32020` refusals, a request that names no MCP version, and how the extension is declared to older clients. The extension id is `io.github.ambientcontextprotocol/context`; `0.1` used `org.humanitas/ambient-context`. Before the tag, on `2026.11.16`, section 8 was restated for any platform and the macOS values moved into a profile in 8.1, with no change to what a provider or host on macOS does.
 - `0.1` · `2026.11.09` · First version. Two operations, `current` and `locate`; items with MCP content blocks; locations. Carried as an MCP extension: two resources on a loopback MCP server, found through a descriptor file. Revised the same day after an adversarial review: provider instances, endpoint checks, the limits of the descriptor's protection, and corrected request metadata.

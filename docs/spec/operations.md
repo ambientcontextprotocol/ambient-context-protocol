@@ -20,7 +20,7 @@ Result, an object with exactly these three fields:
 | `instance` | string | yes | A random value the provider mints each time it starts. It identifies this run of the provider. See [ids and instances](elements.md#54--ids-and-instances). |
 | `root` | [element](elements.md#5-elements) | yes | The app, as an element with role `Application`. Everything the provider reports is inside it. |
 
-The app's name is the root's `title`. Its bundle identifier is in the descriptor ([section 8](discovery.md#8-discovery)), not in the answer.
+The app's name is the root's `title`. Its identifier is in the descriptor ([section 8](discovery.md#8-discovery)), not in the answer.
 
 The result's shape is also given as a JSON Schema, [`schema/current-0.2.0.json`](../../schema/current-0.2.0.json). The schema checks what a schema can; unique ids, the focus path and the single hovered element are rules of [section 5](elements.md#5-elements) it cannot state.
 

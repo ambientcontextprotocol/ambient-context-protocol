@@ -160,7 +160,7 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 
 | Requirement | Statement | On | Priority | Verified by | Since | Until | RFC |
 |---|---|---|---|---|---|---|---|
-| **PR-017** — Descriptor | While it is running and enabled, a provider keeps a descriptor file at `~/Library/Application Support/AmbientContext/providers/<bundle-id>.<pid>.json`. | Provider | P0 | V-005 | 0.1 | — | — |
+| **PR-017** — Descriptor | While it is running and enabled, a provider keeps a descriptor file named `<app-id>.<pid>.json` in the descriptor folder its platform's profile gives (specification 8.1); on macOS, `~/Library/Application Support/AmbientContext/providers/<bundle-id>.<pid>.json`. | Provider | P0 | V-005 | 0.1 | — | — |
 | **PR-018** — Descriptor fields | The descriptor holds `protocol`, `app`, `pid`, `instance`, `endpoint`, `token` and `started`. | Provider | P0 | — | 0.1 | — | — |
 | **PR-019** — Descriptor permissions | The providers folder is mode `0700` and each descriptor is mode `0600`. | Provider | P0 | V-006 | 0.1 | — | — |
 | **PR-020** — Descriptor removal | A provider removes its descriptor when it quits. A host ignores a descriptor whose `pid` is not running. | Both | P0 | V-007, V-016 | 0.1 | — | — |

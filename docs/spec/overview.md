@@ -1,6 +1,6 @@
 # Ambient Context Protocol · Overview
 
-> Part of the [specification](index.md), version `0.2.0`.
+> Part of the [specification](index.md), version `0.2.1`.
 
 **An extension to MCP.** The Ambient Context Protocol is an extension to the Model Context Protocol (MCP), not a protocol of its own. A provider is an ordinary MCP server, the two answers are ordinary MCP resources, and a client that has never heard of the extension can still list and read them. It is called a protocol to give it a short name to refer to.
 
@@ -67,8 +67,9 @@ Decoded, the text is one tree of elements:
 
 ```json
 {
-  "protocol": "0.2.0",
+  "protocol": "0.2.1",
   "instance": "k3f9x2",
+  "display": { "title": "draft.md", "detail": "line 31" },
   "root": {
     "id": "app",
     "role": "Application",
@@ -113,7 +114,7 @@ Decoded, the text is one tree of elements:
 }
 ```
 
-The tree says how things relate: the selected sentence is inside `draft.md`, which is the document the user is in; `notes.md` is open in a tab that is not showing.
+`display` is optional: the editor's own words for the line the host shows the user ([4.3](operations.md#43--display)). The tree says how things relate: the selected sentence is inside `draft.md`, which is the document the user is in; `notes.md` is open in a tab that is not showing.
 
 **Step 3.** The host shows the user what it picked up, so they can remove it, and passes it to the agent with the question. How a host words this for its agent is the host's business.
 
@@ -148,5 +149,5 @@ Four principles shape everything else:
 
 1. *The app says where; the host decides what.* A provider reports elements and their positions. It never names what the host draws there.
 2. *A shared language for how a thing is shown, the app's own word for what it is.* Every element has a `role` from a short fixed list (a window, a list, a row, text), which a program can write rules against. What the thing is to the app (a task, a comment, a layer) goes in `subrole` and `attributes`, which the app defines freely. A language model can read any of it, so there is nothing to gain from standardizing "task."
-3. *Pulled on the user's action.* A host asks for context when the user does something that calls for it. A provider does not push, and a host does not poll. Provisional: this holds for version 0.2.0 and may change.
+3. *Pulled on the user's action.* A host asks for context when the user does something that calls for it. A provider does not push, and a host does not poll. Provisional: this holds for version 0.2.1 and may change.
 4. *It is ordinary MCP.* A provider is an MCP server and the two answers are MCP resources. A client that has never heard of this protocol can still list and read them.

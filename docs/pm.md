@@ -1,8 +1,8 @@
 # Ambient Context Protocol · Product Model
 
-Last updated: `2026.11.10`
+Last updated: `2026.11.17`
 
-> A protocol by which a desktop app tells an ambient agent host what the user has open, what they have selected, and where an element is on screen. Version `0.2.0`; requirements are marked with the versions they hold in. First provider: Paper. First host: Sirius. Task: SIR-0105.
+> A protocol by which a desktop app tells an ambient agent host what the user has open, what they have selected, and where an element is on screen. Version `0.2.1`; requirements are marked with the versions they hold in. First provider: Paper. First host: Sirius. Task: SIR-0105.
 
 **Status.** Draft for Andrew's review. Nothing here is in the graph. The structure uses the product ontology as edited on 2026.11.09 (Domain, Feature, Requirement, Verification; the Product level is left out because this repository holds one product). The requirements restate the design in the [plan](../../paper/.plan/ambient-context-provider.md) and the [protocol draft](spec/index.md); most of their wording is Claude's and unconfirmed. All method, field and path names are placeholders.
 
@@ -90,7 +90,7 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 | **PR-002** — Item shape | Every item has `id`, `type` and `title`. An item may have `content`, `url`, `parent`, `locatable` and `payload`. | Provider | P0 | — | 0.1 | 0.1 | — |
 | **PR-003** — Focus | The response names the focus as an ordered list of item ids. A selection is an item whose `parent` is the item it was made in. | Provider | P0 | — | 0.1 | 0.1 | — |
 | **PR-004** — Response time | A provider answers a request for current context from state it already holds, without waiting on disk or network. A host sets its own time limit and proceeds without context when the limit passes. | Both | P0 | V-002 | 0.1 | — | — |
-| **PR-047** — Current as a tree | On request, a provider returns in one response an object with exactly `protocol`, `instance` and `root`. `root` is one tree of elements holding everything the provider reports. Replaces PR-001. | Provider | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
+| **PR-047** — Current as a tree | On request, a provider returns in one response an object with exactly `protocol`, `instance` and `root`. `root` is one tree of elements holding everything the provider reports. Replaces PR-001. | Provider | P0 | — | 0.2.0 | 0.2.0 | [0001](rfcs/0001-element-model.md) |
 | **PR-048** — Element shape | Every element has `id` and `role`. An element may have `subrole`, `title`, `content`, `url`, `selected`, `focused`, `visible`, `hovered`, `children` and `attributes`. An empty `children` list is not sent. Replaces PR-002. | Provider | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
 | **PR-049** — Role language | Every `role` is one of the thirteen in the specification, §5.2. The root is an `Application` and no other element is. A provider does not report controls, menus, indicators or window furniture. | Provider | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
 | **PR-050** — State said once | A provider states `selected`, `focused`, `visible` and `hovered` only on the element they describe. `selected`, `focused` and `hovered` are sent only when true. | Provider | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
@@ -99,6 +99,9 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 | **PR-053** — Hover is one element | At most one element in an answer has `hovered` true: the innermost reported element under the pointer. No ancestor or descendant of it is marked. | Provider | P0 | — | 0.2.0 | — | [0003](rfcs/0003-hovered-state.md) |
 | **PR-054** — Hover is true | An element marked `hovered` is the one under the pointer when the provider answers. A provider creates no element in order to mark it. | Provider | P0 | — | 0.2.0 | — | [0003](rfcs/0003-hovered-state.md) |
 | **PR-055** — Absent hover | A host infers nothing from `hovered` being absent everywhere. | Host | P0 | — | 0.2.0 | — | [0003](rfcs/0003-hovered-state.md) |
+| **PR-072** — Current as a tree, with display | On request, a provider returns in one response an object with `protocol`, `instance` and `root`, optionally `display`, and nothing else. `root` is one tree of elements holding everything the provider reports. Replaces PR-047. | Provider | P0 | — | 0.2.1 | — | [0005](rfcs/0005-display-and-favicon.md) |
+| **PR-074** — Display shape | `display`, when sent, is an object. Its `title` and `detail`, when sent, are strings of plain text on one line, each of 80 characters or fewer. | Provider | P0 | — | 0.2.1 | — | [0005](rfcs/0005-display-and-favicon.md) |
+| **PR-075** — Display says no more than the tree | `display` describes the same moment and the same tree as the answer it is in. It holds no content the provider does not report as an element and names nothing from an element the provider left out. | Provider | P0 | — | 0.2.1 | — | [0005](rfcs/0005-display-and-favicon.md) |
 
 **F-CX2 — Content** · P0. An item carries its content in a form any agent can read.
 
@@ -168,6 +171,8 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 | **PR-042** — Atomic write | A provider writes its descriptor after its listener is up, to a temporary name in the same folder, then renames it into place. | Provider | P0 | — | 0.1 | — | — |
 | **PR-043** — Endpoint check | Before using a descriptor, a host checks that the endpoint's address is `127.0.0.1` and that the process listening on its port is the process the descriptor names. It does not follow redirects, and it ignores an answer whose `instance` differs from the descriptor's. | Host | P0 | V-015 | 0.1 | — | — |
 | **PR-061** — Answer version | A host ignores an answer whose `protocol` differs from the descriptor's. | Host | P0 | — | 0.2.0 | — | — |
+| **PR-078** — Favicon place | An app that ships a favicon for hosts ships one SVG or PNG image at the place its platform's profile gives (specification 8.1); on macOS, `Contents/Resources/favicon.svg` in the app's bundle, or `favicon.png` there when there is no SVG. A PNG is at least 32 by 32 pixels. No descriptor or answer names or carries it. | Provider | P1 | — | 0.2.1 | — | [0005](rfcs/0005-display-and-favicon.md) |
+| **PR-079** — Favicon found by the host | A host reads an app's favicon only from the profile's place in the installed app whose process it identified as in front, never from a path, URL or bytes a provider or descriptor names. It bounds the size it reads and treats a file that is missing, too large or not a readable image as absent. | Host | P0 | — | 0.2.1 | — | [0005](rfcs/0005-display-and-favicon.md) |
 
 **F-DI2 — Discovery without a descriptor** · P2. A provider that cannot announce itself with a descriptor is still found.
 
@@ -201,9 +206,10 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 | **PR-028** — Version in the descriptor | The descriptor's `protocol` field carries the same version, so a host can decide before connecting. | Provider | P0 | — | 0.1 | — | — |
 | **PR-029** — Unknown fields | Both sides ignore fields they do not recognize. | Both | P0 | — | 0.1 | — | — |
 | **PR-030** — Unsupported version | A host that does not support a provider's version treats the app as if it were not a provider. | Host | P0 | — | 0.1 | — | — |
-| **PR-066** — Declared version, three places | A provider gives the same version, `0.2.0`, in the MCP extension `"io.github.ambientcontextprotocol/context": {"version": "0.2.0"}`, in the descriptor and in the `current` answer. Replaces PR-027. | Provider | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
+| **PR-066** — Declared version, three places | A provider gives the same version, `0.2.0`, in the MCP extension `"io.github.ambientcontextprotocol/context": {"version": "0.2.0"}`, in the descriptor and in the `current` answer. Replaces PR-027. | Provider | P0 | — | 0.2.0 | 0.2.0 | [0001](rfcs/0001-element-model.md) |
 | **PR-067** — Version agreement | Before 1.0 a host and a provider work together only if they agree on the major and minor parts of the version. A patch version only adds. | Both | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
 | **PR-068** — Unknown role | A receiver treats a role it does not know as `Group`. | Both | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
+| **PR-073** — Declared version, three places | A provider gives the same version, `0.2.1`, in the MCP extension `"io.github.ambientcontextprotocol/context": {"version": "0.2.1"}`, in the descriptor and in the `current` answer. Replaces PR-066. | Provider | P0 | — | 0.2.1 | — | [0005](rfcs/0005-display-and-favicon.md) |
 
 ### 3.7 — Security
 
@@ -236,6 +242,8 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 | **PR-038** — Other apps in one line | For each other visible app that is a provider, a host may include one line naming the app and its focused item. | Host | P1 | — | 0.1 | — | — |
 | **PR-039** — No provider, no change | With an app in front that is not a provider, a host behaves exactly as it would without the protocol. | Host | P0 | V-012 | 0.1 | — | — |
 | **PR-071** — Hover is weaker | A host presents `hovered` to an agent as where the pointer is, distinct from and weaker than `selected`, and sends no more of an element's content because it is hovered. | Host | P0 | — | 0.2.0 | — | [0003](rfcs/0003-hovered-state.md) |
+| **PR-076** — Display read leniently | A host uses `display` only when its `title` is a non-empty string. It reads a `display` that is not an object, or a `title` or `detail` that is not a string, as absent, and never refuses an answer because of it. | Host | P0 | — | 0.2.1 | — | [0005](rfcs/0005-display-and-favicon.md) |
+| **PR-077** — Display drawn as plain text | A host draws `display` as plain text on one line, cut to a length of its choosing, with control characters removed and no markup or links interpreted. It remains a label: the user can still remove the context it names. | Host | P0 | — | 0.2.1 | — | [0005](rfcs/0005-display-and-favicon.md) |
 
 ---
 
@@ -270,6 +278,8 @@ Each Verification checks one Requirement; a Requirement may have several. The "P
 ---
 
 ## 5. Coverage
+
+*Version 0.2.1.* 70 Requirements hold, 63 of them at P0: RFC-0005 retired PR-047 and PR-066 and added PR-072 to PR-079, of which the outside check covers PR-072, PR-073 and PR-074 and the schema is `schema/current-0.2.1.json`.
 
 *Version 0.2.0.* 64 Requirements hold, 58 of them at P0, and 16 of those have a Verification. None of the 24 P0 Requirements added in 0.2.0 has one yet: most are checks on the shape of an answer, which the schema (`schema/current-0.2.0.json`) and the outside check (ACP-0001) define, and their Verifications are added with that work. The rest of this section was written for 0.1 and is kept as the record of that version.
 

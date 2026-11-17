@@ -1,6 +1,6 @@
 # Ambient Context Protocol · The MCP binding
 
-> Part of the [specification](index.md), version `0.2.0`.
+> Part of the [specification](index.md), version `0.2.1`.
 
 ## 7. The MCP binding
 
@@ -34,7 +34,7 @@ The provider lists the extension in its capabilities, which a client gets from `
   "capabilities": {
     "resources": {},
     "extensions": {
-      "io.github.ambientcontextprotocol/context": { "version": "0.2.0" }
+      "io.github.ambientcontextprotocol/context": { "version": "0.2.1" }
     }
   },
   "_meta": {

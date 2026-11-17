@@ -5,11 +5,11 @@ import type { AddressInfo, Server, Socket } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import type { ContextContent, ContextElement, ContextLocation, ContextProvider, ContextRect } from "./provider.ts";
+import type { ContextContent, ContextDisplay, ContextElement, ContextLocation, ContextProvider, ContextRect } from "./provider.ts";
 import { ContextTree } from "./tree.ts";
 import type { ContextIssue } from "./tree.ts";
 
-// A provider for the Ambient Context Protocol, version 0.2.0: a small MCP
+// A provider for the Ambient Context Protocol, version 0.2.1: a small MCP
 // server on the loopback interface that answers `current` and `locate`
 // as two resources, and the descriptor file that tells a host where it
 // is. It is handed a `ContextProvider` and knows nothing else about the
@@ -195,6 +195,32 @@ function encodeContent(block: ContextContent): unknown {
 // `selected`, `focused` and `hovered` are false when absent, so only true
 // is sent. `visible` is the parent's value when absent, so either value a
 // provider gave is sent.
+/** The longest line of a `display` the protocol allows, in characters. */
+const displayLineLimit = 80;
+
+/**
+ * One line of plain text: line breaks and control characters become
+ * spaces, runs of spaces become one, and a line over the limit is cut and
+ * ends in an ellipsis. Undefined when nothing is left or it is no string.
+ */
+function displayLine(text: unknown): string | undefined {
+  if (typeof text !== "string") return undefined;
+  const line = text.replace(/[\p{Cc}\u2028\u2029]/gu, " ").split(" ").filter((word) => word !== "").join(" ");
+  if (line === "") return undefined;
+  const characters = Array.from(line);
+  return characters.length <= displayLineLimit ? line : characters.slice(0, displayLineLimit - 1).join("") + "…";
+}
+
+/**
+ * What is sent for a provider's `display`: nothing without a title, since
+ * a host uses `display` only when it has one.
+ */
+function encodeDisplay(display: ContextDisplay | null | undefined): unknown {
+  const title = displayLine(display?.title);
+  if (title === undefined) return undefined;
+  return { title, detail: displayLine(display?.detail) };
+}
+
 function encodeElement(element: ContextElement): unknown {
   return {
     id: element.id,
@@ -238,6 +264,11 @@ export interface ContextResponderOptions {
   /** The tree, rooted at an `Application`. */
   current: () => ContextElement | Promise<ContextElement>;
   /**
+   * The app's own words for what `current` holds. Absent, or answering
+   * nothing, leaves the wording to the host.
+   */
+  display?: (() => ContextDisplay | null | undefined | Promise<ContextDisplay | null | undefined>) | undefined;
+  /**
    * Absent for a provider that does not report positions: the location
    * template is then not offered and no location can be read.
    */
@@ -273,7 +304,7 @@ export interface ContextResponderOptions {
  * belongs in a log.
  */
 export class ContextResponder {
-  static readonly protocolVersion = "0.2.0";
+  static readonly protocolVersion = "0.2.1";
   static readonly extensionID = "io.github.ambientcontextprotocol/context";
   /** The path used when none is given. */
   static readonly endpointPath = "/mcp";
@@ -289,6 +320,7 @@ export class ContextResponder {
   instance: string;
   token: string;
   current: ContextResponderOptions["current"];
+  display: ContextResponderOptions["display"];
   locate: ContextResponderOptions["locate"];
   path: string;
   check: "warn" | "refuse" | "off";
@@ -300,6 +332,7 @@ export class ContextResponder {
     this.instance = options.instance;
     this.token = options.token;
     this.current = options.current;
+    this.display = options.display;
     this.locate = options.locate;
     this.path = options.path ?? ContextResponder.endpointPath;
     if (!this.path.startsWith("/") || this.path.includes("?") || this.path.includes("#")) {
@@ -426,10 +459,12 @@ export class ContextResponder {
   private async read(uri: string): Promise<string | undefined> {
     if (uri === ContextResponder.currentURI) {
       const root = await this.current();
+      const display = this.display ? await this.display() : undefined;
       this.#inspect(root);
       return sortedJSON({
         protocol: ContextResponder.protocolVersion,
         instance: this.instance,
+        display: encodeDisplay(display),
         root: encodeElement(root),
       });
     }
@@ -715,6 +750,7 @@ export class ContextServer {
     const responder = new ContextResponder({
       app: this.#app, instance, token,
       current: () => provider.current(),
+      display: typeof provider.display === "function" ? () => provider.display?.() : undefined,
       locate,
       ...(this.#check ? { check: this.#check } : {}),
       ...(this.#report ? { report: this.#report } : {}),

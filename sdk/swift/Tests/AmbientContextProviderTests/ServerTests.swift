@@ -164,7 +164,7 @@ struct ContextServerTests {
         let capabilities = try #require(result["capabilities"] as? [String: Any])
         #expect(capabilities["resources"] is [String: Any])
         let extensions = try #require(capabilities["extensions"] as? [String: [String: String]])
-        #expect(extensions["io.github.ambientcontextprotocol/context"] == ["version": "0.2.0"])
+        #expect(extensions["io.github.ambientcontextprotocol/context"] == ["version": "0.2.1"])
         let meta = try #require(result["_meta"] as? [String: [String: String]])
         #expect(meta["io.modelcontextprotocol/serverInfo"] == ["name": "Editor", "version": "2.3.0"])
     }
@@ -185,9 +185,9 @@ struct ContextServerTests {
     func currentReturnsTheProtocolTheInstanceAndTheTree() async throws {
         let uri = "ambient://current"
         let current = try document(await responder.respond(to: request("resources/read", params: ["uri": uri])), uri: uri)
-        // Exactly these three: the app's name is the root's title.
+        // These three and no display: this provider words nothing.
         #expect(Set(current.keys) == ["protocol", "instance", "root"])
-        #expect(current["protocol"] as? String == "0.2.0")
+        #expect(current["protocol"] as? String == "0.2.1")
         #expect(current["instance"] as? String == "k3f9x2")
 
         let root = try #require(current["root"] as? [String: Any])
@@ -292,6 +292,47 @@ struct ContextServerTests {
         )
         let response = await strict.respond(to: request("resources/read", params: ["uri": "ambient://current"]))
         #expect((try json(response)["error"] as? [String: Any])?["code"] as? Int == -32602)
+    }
+
+    // MARK: - Display (RFC-0005)
+
+    private func displayed(_ display: ContextDisplay?) async throws -> [String: Any] {
+        let worded = ContextResponder(
+            app: .init(id: "org.example.editor", name: "Editor", version: "2.3.0"), instance: "k3f9x2",
+            token: Self.token, current: { Self.tree }, display: { display }
+        )
+        let uri = "ambient://current"
+        return try document(await worded.respond(to: request("resources/read", params: ["uri": uri])), uri: uri)
+    }
+
+    @Test
+    func displayIsSentBesideTheTree() async throws {
+        let current = try await displayed(ContextDisplay(title: "draft.md", detail: "lines 12–18"))
+        #expect(Set(current.keys) == ["protocol", "instance", "root", "display"])
+        #expect(current["display"] as? [String: String] == ["title": "draft.md", "detail": "lines 12–18"])
+    }
+
+    @Test
+    func aDisplayWithATitleOnlySendsNoDetail() async throws {
+        let current = try await displayed(ContextDisplay(title: "draft.md"))
+        #expect(current["display"] as? [String: String] == ["title": "draft.md"])
+    }
+
+    @Test
+    func noDisplayIsSentWithoutATitle() async throws {
+        #expect(try await displayed(nil)["display"] == nil)
+        #expect(try await displayed(ContextDisplay(detail: "lines 12–18"))["display"] == nil)
+        #expect(try await displayed(ContextDisplay(title: " \n ", detail: "lines 12–18"))["display"] == nil)
+    }
+
+    @Test
+    func eachLineOfADisplayIsOneLineOfAtMostEightyCharacters() async throws {
+        let long = String(repeating: "é", count: 200)
+        let current = try await displayed(ContextDisplay(title: "a\nb\r\n\tc\u{0}  d", detail: long))
+        let display = try #require(current["display"] as? [String: String])
+        #expect(display["title"] == "a b c d")
+        #expect(display["detail"] == String(repeating: "é", count: 79) + "…")
+        #expect(ContextDisplay.line(String(repeating: "x", count: 80)) == String(repeating: "x", count: 80))
     }
 
     // MARK: - A path of the app's choosing
@@ -586,7 +627,7 @@ struct ContextServerTests {
 
     private func descriptor(pid: Int32) -> ContextDescriptor {
         ContextDescriptor(
-            protocol: "0.2.0", app: .init(id: "org.example.editor", name: "Editor", version: "2.3.0"),
+            protocol: "0.2.1", app: .init(id: "org.example.editor", name: "Editor", version: "2.3.0"),
             pid: pid, instance: "k3f9x2", endpoint: "http://127.0.0.1:53124/mcp", token: "secret",
             started: "2026-11-09T21:14:03Z"
         )
@@ -607,7 +648,7 @@ struct ContextServerTests {
 
         let written = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
         #expect(Set(written.keys) == ["protocol", "app", "pid", "instance", "endpoint", "token", "started"])
-        #expect(written["protocol"] as? String == "0.2.0")
+        #expect(written["protocol"] as? String == "0.2.1")
         #expect(written["pid"] as? Int == 48211)
         #expect(written["endpoint"] as? String == "http://127.0.0.1:53124/mcp")
         #expect(written["app"] as? [String: String] == ["id": "org.example.editor", "name": "Editor", "version": "2.3.0"])

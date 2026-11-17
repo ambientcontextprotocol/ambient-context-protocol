@@ -16,7 +16,7 @@ import type { ContextElement, ContextHTTPRequest, ContextProvider, ContextValue 
 // The package as an app uses it: only the public interface, over a real
 // socket, found through the descriptor file as a host finds it. Ported
 // from the Swift package's `PublicInterfaceTests.swift` at draft 0.1 and
-// carried to version 0.2.0; the tests after the first three are this
+// carried to version 0.2.1; the tests after the first three are this
 // package's own.
 
 type JSONObject = Record<string, any>;
@@ -139,7 +139,7 @@ test("aProviderThatOnlySaysWhatIsOpen", async (t) => {
 
   const current = documentOf(await call(descriptor, "resources/read", "ambient://current"));
   assert.equal(current["instance"], descriptor.instance);
-  assert.equal(current["protocol"], "0.2.0");
+  assert.equal(current["protocol"], "0.2.1");
   assert.equal(current["root"].role, "Application");
   assert.equal(current["root"].children[0].children[0].title, "Groceries");
   assert.deepEqual(ContextTree.check(current["root"]), []);
@@ -153,6 +153,17 @@ test("aProviderThatOnlySaysWhatIsOpen", async (t) => {
   server.stop();
   assert.equal(existsSync(file), false);
   assert.equal(server.isRunning, false);
+});
+
+test("aProviderThatWordsItsOwnLine", async (t) => {
+  const worded: ContextProvider = { ...notes, display: () => ({ title: "Groceries", detail: "3 items" }) };
+  const { descriptor } = await started(t, worded);
+  const current = documentOf(await call(descriptor, "resources/read", "ambient://current"));
+  assert.deepEqual(current["display"], { title: "Groceries", detail: "3 items" });
+
+  const plain = await started(t, notes);
+  const without = documentOf(await call(plain.descriptor, "resources/read", "ambient://current"));
+  assert.deepEqual(Object.keys(without).sort(), ["instance", "protocol", "root"]);
 });
 
 test("aProviderThatAlsoSaysWhere", async (t) => {
@@ -174,7 +185,7 @@ test("theDescriptorNamesALoopbackListenerThatIsAlreadyUp", async (t) => {
   assert.equal(server.endpoint?.href, descriptor.endpoint);
   assert.equal(server.token, descriptor.token);
   assert.equal(server.instance, descriptor.instance);
-  assert.equal(descriptor.protocol, "0.2.0");
+  assert.equal(descriptor.protocol, "0.2.1");
   assert.match(descriptor.started, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
   assert.equal(statSync(directory).mode & 0o777, 0o700);
   assert.equal(statSync(file).mode & 0o777, 0o600);

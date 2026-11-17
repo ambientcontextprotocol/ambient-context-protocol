@@ -1,6 +1,6 @@
 # The outside check
 
-> A script that tests any running Ambient Context Protocol provider from outside, and a fake provider for testing a host. Both are for version `0.2.0` and need only Python 3 and its standard library.
+> A script that tests any running Ambient Context Protocol provider from outside, and a fake provider for testing a host. Both are for version `0.2.1` and need only Python 3 and its standard library.
 
 ## What it is
 
@@ -47,13 +47,13 @@ The token is sent only to this machine. If a descriptor's endpoint names any oth
 
 ## What it checks
 
-- *The descriptor,* when a path is given: the seven fields, the file's name, mode `0600` on the file and `0700` on its folder, a running process, protocol `0.2.0`, an endpoint at `127.0.0.1` with a path and no query or fragment (PR-017, PR-018, PR-019, PR-020, PR-028, PR-031, PR-062).
+- *The descriptor,* when a path is given: the seven fields, the file's name, mode `0600` on the file and `0700` on its folder, a running process, protocol `0.2.1`, an endpoint at `127.0.0.1` with a path and no query or fragment (PR-017, PR-018, PR-019, PR-020, PR-028, PR-031, PR-062).
 - *Refusals:* no token and a wrong token get `401`; any `Origin` header gets `403` with no body, before the token is judged and on `OPTIONS` too; a method other than `POST` gets `405`; an oversized request gets `413`; no response carries an `Access-Control-Allow-*` header (PR-032, PR-033, PR-063, PR-065).
 - *MCP's request rules:* a body that is not a request, a missing `protocolVersion` or `clientCapabilities`, headers that are missing or disagree with the body, an unknown method and an unknown MCP version each get the status and error code in section 7.4 (PR-026, PR-064, PR-065).
-- *Declaring and listing:* `server/discover` names MCP `2026-07-28` and declares the extension with version `0.2.0`; `resources/list` lists `ambient://current`; `resources/templates/list` answers; reading `ambient://current` returns one `application/json` entry (PR-024, PR-026, PR-066).
-- *The answer:* exactly `protocol`, `instance` and `root`; the protocol is `0.2.0` and the instance is the descriptor's; every element has the fields, types, id form, role and content blocks that [`schema/current-0.2.0.json`](../../schema/current-0.2.0.json) requires; and the three rules the schema cannot state: ids are unique, the focused elements form one unbroken path, and at most one element is hovered (PR-005, PR-040, PR-047, PR-048, PR-049, PR-050, PR-051, PR-053, PR-059, PR-066).
+- *Declaring and listing:* `server/discover` names MCP `2026-07-28` and declares the extension with version `0.2.1`; `resources/list` lists `ambient://current`; `resources/templates/list` answers; reading `ambient://current` returns one `application/json` entry (PR-024, PR-026, PR-073).
+- *The answer:* `protocol`, `instance` and `root`, optionally `display`, and nothing else; the protocol is `0.2.1` and the instance is the descriptor's; a `display` that is sent is an object whose `title` and `detail` are each a string on one line of at most 80 characters; every element has the fields, types, id form, role and content blocks that [`schema/current-0.2.1.json`](../../schema/current-0.2.1.json) requires; and the three rules the schema cannot state: ids are unique, the focused elements form one unbroken path, and at most one element is hovered (PR-005, PR-040, PR-072, PR-048, PR-049, PR-050, PR-051, PR-053, PR-059, PR-073).
 - *Locations,* when the provider offers them: each id in the answer gets a well-formed location or the "cannot place" error, and an id never issued gets the error (PR-011, PR-060).
-- *Older clients:* `ping` is answered, the `initialize` handshake is answered and declares the extension under `capabilities.experimental`, and a client that sends nothing in `_meta` can list and read (PR-025, PR-026, PR-066). A provider that offers neither `ping` nor the handshake is warned, not failed.
+- *Older clients:* `ping` is answered, the `initialize` handshake is answered and declares the extension under `capabilities.experimental`, and a client that sends nothing in `_meta` can list and read (PR-025, PR-026, PR-073). A provider that offers neither `ping` nor the handshake is warned, not failed.
 
 The tree is validated by hand in `check.py`, so that the check needs no package. `tools/check-schema.py` validates the specification's examples against the schema itself and needs `jsonschema`.
 
@@ -63,6 +63,7 @@ A check that only sends requests sees what a provider answers. It does not see w
 
 - *The bind address.* The check confirms that the descriptor names `127.0.0.1`. It cannot tell from a request whether the socket is bound to loopback only or to every interface (PR-031). Inspect the listener yourself, for example with `lsof -nP -iTCP -sTCP:LISTEN`.
 - *Logging.* Whether the token or anything from an answer is written to a log (PR-070) cannot be seen from outside.
+- *Display and the favicon.* The check confirms the shape of `display` (PR-074). It cannot tell whether `display` names only what the tree holds (PR-075), and it does not look for a favicon file (PR-078): it is given an endpoint, not an app. What a host does with either (PR-076, PR-077, PR-079) is host conduct. To test a host's reader, start the fake provider with `--no-display` or with one of the `display-` faults: the host should fall back to its own wording and still use the tree.
 - *Whether the answer is true.* The check confirms that at most one element is hovered, not that the pointer is over it (PR-054). The same holds for `selected`, `focused` and `visible`, for whether rectangles match the screen (PR-012, PR-013), and for whether the provider reports what the user would expect and no controls or window furniture (PR-049, PR-056, PR-057, PR-058). A provider's own test must place the pointer or the selection and read the answer.
 - *Ids over time.* Whether an id keeps its meaning through edits and is never reused (PR-009, PR-010) would need the app to be driven between two reads. The `gone` state is checked only if the provider happens to answer with it.
 - *The life of the descriptor and the token.* That the descriptor is written after the listener is up and by rename, removed at quit and absent when the provider is turned off (PR-020, PR-021, PR-042); that the token and the instance are new at each launch, stored nowhere else and accepted nowhere else (PR-034, PR-040, PR-069). The check sees one run. It also does not check that the descriptor is in the real folder, since a provider under test may be told to write elsewhere.

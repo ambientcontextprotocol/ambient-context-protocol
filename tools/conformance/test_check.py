@@ -100,6 +100,19 @@ class CleanProvider(unittest.TestCase):
         self.assertEqual(not_passing(results), {"locate-issued": check.SKIP, "locate-never-issued": check.SKIP})
         self.assertFalse(results.failed)
 
+    def test_without_display_every_check_still_passes(self):
+        with Running(display=False) as provider:
+            results = check.run(descriptor_path=provider.descriptor)
+        self.assertEqual(not_passing(results), {})
+        self.assertIn("no display", by_name(results)["current-display"]["detail"])
+
+    def test_a_display_problem_names_the_field_and_never_quotes_it(self):
+        with Running(faults=["display-two-lines"]) as provider:
+            results = check.run(descriptor_path=provider.descriptor)
+        detail = by_name(results)["current-display"]["detail"]
+        self.assertIn("display.detail", detail)
+        self.assertNotIn("paragraph", detail)
+
     def test_a_redirect_is_not_followed(self):
         with Running(redirect=True) as provider:
             results = check.run(descriptor_path=provider.descriptor)
@@ -352,7 +365,7 @@ class CommandLine(unittest.TestCase):
             process.wait(timeout=10)
         self.assertEqual(done.returncode, 1)
         report = json.loads(done.stdout)
-        self.assertEqual(report["protocol"], "0.2.0")
+        self.assertEqual(report["protocol"], "0.2.1")
         self.assertEqual(report["summary"]["fail"], 2)
         failed = {(item["requirement"], item["name"]) for item in report["results"] if item["status"] == "FAIL"}
         self.assertEqual(failed, {("PR-053", "hovered-single"), ("PR-059", "ids-unique")})

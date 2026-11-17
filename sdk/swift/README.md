@@ -1,6 +1,6 @@
 # Ambient Context for Swift
 
-Makes a macOS app a provider of the [Ambient Context Protocol](../../docs/spec/index.md), version 0.2.0: it runs the local server, answers the protocol's requests and keeps the descriptor file a host finds the app by. The app writes one thing, a description of what the user has open and selected.
+Makes a macOS app a provider of the [Ambient Context Protocol](../../docs/spec/index.md), version 0.2.1: it runs the local server, answers the protocol's requests and keeps the descriptor file a host finds the app by. The app writes one thing, a description of what the user has open and selected.
 
 It has no dependencies beyond Foundation and Network, and needs macOS 14 or later.
 
@@ -73,6 +73,22 @@ Three things an app should do around it:
 - Call `stop()` before the app exits: in `applicationWillTerminate`, or in a SwiftUI app with no app delegate, on `NSApplication.willTerminateNotification`. The server holds off sudden termination while it runs so that this call is reached.
 
 `ContextProvider` and `ContextServer` are main-actor types. In a module that makes the main actor its default isolation (Swift 6.2), the app's own types are main-actor too, so the file that builds the `ContextElement` tree from them must be in a module, or a type, that is main-actor isolated as well.
+
+## Word the line a host shows
+
+A host shows the user what it read before anything is sent: a small picture, what is open, what is selected. Left alone, it words that line itself from the tree. An app can word it better, in its own nouns, with one more function:
+
+```swift
+extension NotesContext {
+    func display() -> ContextDisplay? {
+        ContextDisplay(title: "Groceries", detail: "1 word")
+    }
+}
+```
+
+`title` is what is open and `detail` is what is selected or in focus within it. Both are plain text; the package puts each on one line and cuts it at 80 characters, and sends nothing when there is no `title`. `display()` is called on the main actor straight after `current()`, with nothing in between, and must describe the same tree: it names nothing the tree does not hold. Return nil, or leave the function out, to let the host word the line. With a `ContextResponder`, pass `display:` beside `current:`.
+
+The picture is not sent. Ship it as a file in the app's bundle, `Contents/Resources/favicon.svg`, or `favicon.png` (at least 32 by 32 pixels) when there is no SVG. The host finds it there itself. Draw a simple shape in one light color: it is shown at about 16 points, often on a dark surface.
 
 ## Say where it is (optional)
 

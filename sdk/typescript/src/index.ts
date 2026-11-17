@@ -6,6 +6,7 @@
 
 export { ContextContent, ContextLocation, contextRoles } from "./provider.ts";
 export type {
+  ContextDisplay,
   ContextElement,
   ContextLocationEdge,
   ContextLocationState,

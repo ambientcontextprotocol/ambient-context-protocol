@@ -1,5 +1,5 @@
-// The Ambient Context Protocol's types, version 0.2.0 (RFC-0001, the
-// element model; RFC-0003, the hovered state), and the interface an app
+// The Ambient Context Protocol's types, version 0.2.1 (RFC-0001, the
+// element model; RFC-0003, the hovered state; RFC-0005, display), and the interface an app
 // implements to be a provider: `ContextProvider` to say what the user has
 // open and selected, with `locate` as well if it can also say where an
 // element is on screen.
@@ -87,6 +87,24 @@ export interface ContextElement {
 }
 
 /**
+ * The app's own words for what an answer holds, for the line a host shows
+ * the user: `release-runbook.md · lines 12–18`. Optional. A host that gets
+ * none words the line itself from the tree.
+ *
+ * It labels the answer it is sent with: it names nothing the tree does
+ * not hold. Each string is sent on one line of at most 80 characters, and
+ * nothing is sent without a title, since a host uses `display` only when
+ * it has one. The picture a host draws beside it is not sent; it is a
+ * favicon file the app ships, which the host finds itself.
+ */
+export interface ContextDisplay {
+  /** What is open: the document, the view, the thread. */
+  title?: string;
+  /** What is selected or in focus within it: `lines 12–18`, `3 tasks`. */
+  detail?: string;
+}
+
+/**
  * A rectangle in global display coordinates: points, origin at the top
  * left of the primary display, y increasing downward.
  */
@@ -128,6 +146,12 @@ export interface ContextProvider {
    * instance.
    */
   current(): ContextElement | Promise<ContextElement>;
+
+  /**
+   * The app's own words for what `current()` holds, or nothing to let the
+   * host word it. Called straight after `current()`. Optional.
+   */
+  display?(): ContextDisplay | null | undefined | Promise<ContextDisplay | null | undefined>;
 
   /**
    * Where the element is, or nothing for an id this run never issued. An

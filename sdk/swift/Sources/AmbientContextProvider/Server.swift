@@ -1,7 +1,7 @@
 import Foundation
 import Network
 
-// A provider for the Ambient Context Protocol, version 0.2.0: a small
+// A provider for the Ambient Context Protocol, version 0.2.1: a small
 // MCP server on the loopback interface that answers `current` and
 // `locate` as two resources, and the descriptor file that tells a host
 // where it is. It is handed a `ContextProvider` and knows nothing else
@@ -174,7 +174,7 @@ public enum ContextCheck: Sendable {
 public struct ContextResponder: Sendable {
     typealias App = ContextApp
 
-    public static let protocolVersion = "0.2.0"
+    public static let protocolVersion = "0.2.1"
     public static let extensionID = "io.github.ambientcontextprotocol/context"
     /// The path `ContextServer` listens on, and the default.
     public static let endpointPath = "/mcp"
@@ -204,6 +204,12 @@ public struct ContextResponder: Sendable {
     var check: ContextCheck = .warn
     var report: @Sendable (ContextIssue) -> Void = ContextResponder.reportToStandardError
     var current: @Sendable () async -> ContextElement
+    /// Nil for a provider that leaves the wording to the host.
+    var display: (@Sendable () async -> ContextDisplay?)?
+    /// The tree and its display read together, for a caller that can
+    /// take both at one moment. When set, it is used in place of
+    /// `current` and `display`.
+    var answer: (@Sendable () async -> (ContextElement, ContextDisplay?))?
     /// Nil for a provider that does not report positions: the location
     /// template is then not offered and no location can be read.
     var locate: (@Sendable (String) async -> ContextLocation?)?
@@ -212,12 +218,14 @@ public struct ContextResponder: Sendable {
     init(
         app: App, instance: String, token: String,
         current: @escaping @Sendable () async -> ContextElement,
+        display: (@Sendable () async -> ContextDisplay?)? = nil,
         locate: (@Sendable (String) async -> ContextLocation?)? = nil
     ) {
         self.app = app
         self.instance = instance
         self.token = token
         self.current = current
+        self.display = display
         self.locate = locate
     }
 
@@ -230,15 +238,18 @@ public struct ContextResponder: Sendable {
     ///   - report: Where issues go under `warn` and `refuse`. Defaults to
     ///     one line each on standard error.
     ///   - current: The tree, rooted at an `application`.
+    ///   - display: The app's own words for what `current` holds. Nil,
+    ///     or a closure that answers nil, leaves the wording to the host.
     ///   - locate: Nil for a provider that does not report positions.
     public init(
         app: ContextApp, instance: String, token: String, path: String = ContextResponder.endpointPath,
         check: ContextCheck = .warn, report: (@Sendable (ContextIssue) -> Void)? = nil,
         current: @escaping @Sendable () async -> ContextElement,
+        display: (@Sendable () async -> ContextDisplay?)? = nil,
         locate: (@Sendable (String) async -> ContextLocation?)? = nil
     ) throws {
         guard path.hasPrefix("/"), !path.contains("?"), !path.contains("#") else { throw InvalidPath(path: path) }
-        self.init(app: app, instance: instance, token: token, current: current, locate: locate)
+        self.init(app: app, instance: instance, token: token, current: current, display: display, locate: locate)
         self.path = path
         self.check = check
         if let report { self.report = report }
@@ -412,9 +423,18 @@ public struct ContextResponder: Sendable {
     /// resource.
     private func read(_ uri: String) async -> String? {
         if uri == Self.currentURI {
-            let root = await current()
+            let root: ContextElement
+            let words: ContextDisplay?
+            if let answer {
+                (root, words) = await answer()
+            } else {
+                root = await current()
+                words = await display?()
+            }
             guard inspect(root) else { return nil }
-            return Self.json(CurrentResult(protocol: Self.protocolVersion, instance: instance, root: root))
+            return Self.json(CurrentResult(
+                protocol: Self.protocolVersion, instance: instance, display: words?.sent, root: root
+            ))
         }
         guard let locate, uri.hasPrefix(Self.locationPrefix),
               let id = String(uri.dropFirst(Self.locationPrefix.count)).removingPercentEncoding,
@@ -433,10 +453,12 @@ public struct ContextResponder: Sendable {
         return true
     }
 
-    /// The answer to `current`: exactly these three fields.
+    /// The answer to `current`: these fields and no others. `display`
+    /// is left out when the provider has none.
     private struct CurrentResult: Encodable {
         var `protocol`: String
         var instance: String
+        var display: ContextDisplay?
         var root: ContextElement
     }
 
@@ -644,14 +666,18 @@ public final class ContextServer {
         if let locator = provider as? any ContextLocator {
             locate = { await locator.locate($0) }
         }
-        let responder = ContextResponder(
+        var responder = ContextResponder(
             app: app, instance: instance, token: token,
             current: { await provider.current() },
             locate: locate
         )
+        // One turn on the main actor for both, so the words describe the
+        // tree they are sent with.
+        responder.answer = { await MainActor.run { (provider.current(), provider.display()) } }
+        let answering = responder
         let queue = queue
         listener.newConnectionHandler = { connection in
-            ContextConnection(connection, responder: responder).start(on: queue)
+            ContextConnection(connection, responder: answering).start(on: queue)
         }
         listener.stateUpdateHandler = { [weak self, weak listener] state in
             guard case .ready = state, let port = listener?.port?.rawValue else { return }

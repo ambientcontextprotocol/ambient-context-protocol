@@ -29,6 +29,11 @@ final class Notes: ContextProvider {
             ]),
         ])
     }
+
+    // The app's own words for the line a host shows the user. Optional.
+    func display() -> ContextDisplay? {
+        ContextDisplay(title: "Groceries", detail: "1 word")
+    }
 }
 
 let notes = Notes()

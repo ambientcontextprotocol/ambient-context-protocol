@@ -3,10 +3,13 @@
 // `org.example.notes` finds it; stop it with Ctrl-C and the descriptor
 // goes with it.
 //
+// A desktop app would also ship a favicon for hosts to draw beside those
+// words: `Contents/Resources/favicon.svg` in its bundle on macOS.
+//
 //   node examples/minimal.ts            the real descriptor folder
 //   node examples/minimal.ts /tmp/acp   a folder of your choosing
 import { ContextServer } from "../src/index.ts";
-import type { ContextElement, ContextProvider } from "../src/index.ts";
+import type { ContextDisplay, ContextElement, ContextProvider } from "../src/index.ts";
 
 const notes: ContextProvider = {
   current(): ContextElement {
@@ -22,6 +25,10 @@ const notes: ContextProvider = {
         }],
       }],
     };
+  },
+  // The app's own words for the line a host shows the user. Optional.
+  display(): ContextDisplay {
+    return { title: "Groceries", detail: "1 word" };
   },
 };
 

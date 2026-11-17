@@ -1,8 +1,8 @@
 # Ambient Context for TypeScript
 
-Makes a desktop app built on Node, such as an Electron app, a provider of the Ambient Context Protocol, version 0.2.0: it runs the local server, answers the protocol's requests and keeps the descriptor file a host finds the app by. The app writes one thing, a tree of what the user has open and selected.
+Makes a desktop app built on Node, such as an Electron app, a provider of the Ambient Context Protocol, version 0.2.1: it runs the local server, answers the protocol's requests and keeps the descriptor file a host finds the app by. The app writes one thing, a tree of what the user has open and selected.
 
-Version 0.2.0 is defined by three accepted proposals until the specification is rewritten to match: [the element model](../../docs/rfcs/0001-element-model.md), [the shared listener](../../docs/rfcs/0002-shared-listener.md) and [the hovered state](../../docs/rfcs/0003-hovered-state.md). Discovery, transport and trust are unchanged from [the 0.1 specification](../../docs/protocol-v0.md), sections 7 and 8.
+Version 0.2.1 is defined by four accepted proposals until the specification is rewritten to match: [the element model](../../docs/rfcs/0001-element-model.md), [the shared listener](../../docs/rfcs/0002-shared-listener.md) [the hovered state](../../docs/rfcs/0003-hovered-state.md) and [display and the favicon](../../docs/rfcs/0005-display-and-favicon.md). Discovery, transport and trust are unchanged from [the 0.1 specification](../../docs/protocol-v0.md), sections 7 and 8.
 
 It uses Node's standard library only and has no dependencies. It is plain TypeScript with no build step: Node 22.18 or later runs the source directly, and a bundler takes it as it is. Like the protocol's discovery, it is for macOS. It began as a port of the [Swift package](../swift/README.md), name for name; that package is still at 0.1, so the two differ until it is carried over.
 
@@ -148,6 +148,23 @@ The responder refuses any request that carries an `Origin` header, a preflight i
 - *Nothing adds cross-origin headers to this path.* A framework that puts `Access-Control-Allow-Origin` on every response, or answers every preflight itself, undoes the refusal, and a test with a client that is not a browser will not show it. Route the path to the responder before such middleware.
 - *The token is used nowhere else.* It is written to the descriptor file, so it must not be a credential the server accepts for anything but this path.
 - *Neither the token nor a response's body is logged.* The body is what the user has selected.
+
+## Word the line a host shows
+
+A host shows the user what it read before anything is sent: a small picture, what is open, what is selected. Left alone, it words that line itself from the tree. An app can word it better, in its own nouns, with one more function:
+
+```ts
+const notesContext: ContextProvider = {
+  current() { /* the tree */ },
+  display() {
+    return { title: "Groceries", detail: "1 word" };
+  },
+};
+```
+
+`title` is what is open and `detail` is what is selected or in focus within it. Both are plain text; the package puts each on one line and cuts it at 80 characters, and sends nothing when there is no `title`. `display()` is called straight after `current()` and must describe the same tree: it names nothing the tree does not hold. Return nothing to let the host word the line.
+
+The picture is not sent. Ship it as a file in the app, `Contents/Resources/favicon.svg` in the bundle on macOS, or `favicon.png` (at least 32 by 32 pixels) when there is no SVG. The host finds it there itself. Draw a simple shape in one light color: it is shown at about 16 points, often on a dark surface. In an Electron app, add the file to the packager's extra resources so that it lands directly in `Contents/Resources`.
 
 ## Say where it is (optional)
 

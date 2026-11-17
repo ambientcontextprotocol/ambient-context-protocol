@@ -1,7 +1,7 @@
 {
   "name": "ambient-context-provider",
-  "version": "0.2.0",
-  "description": "Makes a desktop app a provider of the Ambient Context Protocol, version 0.2.0.",
+  "version": "0.2.1",
+  "description": "Makes a desktop app a provider of the Ambient Context Protocol, version 0.2.1.",
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",

@@ -104,7 +104,7 @@ struct PublicInterfaceTests {
 
         let current = try document(try await call(descriptor, "resources/read", uri: "ambient://current"))
         #expect(current["instance"] as? String == descriptor.instance)
-        #expect(current["protocol"] as? String == "0.2.0")
+        #expect(current["protocol"] as? String == "0.2.1")
         let root = try #require(current["root"] as? [String: Any])
         #expect(root["title"] as? String == "Notes")
         #expect((root["children"] as? [[String: Any]])?.first?["title"] as? String == "Groceries")
@@ -118,6 +118,33 @@ struct PublicInterfaceTests {
         server.stop()
         #expect(!FileManager.default.fileExists(atPath: file.path))
         #expect(!server.isRunning)
+    }
+
+    @MainActor
+    final class WordedNotes: ContextProvider {
+        func current() -> ContextElement {
+            ContextElement(id: "app", role: .application, title: "Notes", children: [
+                ContextElement(id: "note-1", role: .document, subrole: "note", title: "Groceries", focused: true),
+            ])
+        }
+
+        func display() -> ContextDisplay? { ContextDisplay(title: "Groceries", detail: "3 items") }
+    }
+
+    @Test
+    func aProviderThatWordsItsOwnLine() async throws {
+        let (server, descriptor, _) = try await started(WordedNotes())
+        defer { server.stop() }
+        let current = try document(try await call(descriptor, "resources/read", uri: "ambient://current"))
+        #expect(current["display"] as? [String: String] == ["title": "Groceries", "detail": "3 items"])
+    }
+
+    @Test
+    func aProviderThatOnlySaysWhatIsOpenSendsNoDisplay() async throws {
+        let (server, descriptor, _) = try await started(Notes())
+        defer { server.stop() }
+        let current = try document(try await call(descriptor, "resources/read", uri: "ambient://current"))
+        #expect(Set(current.keys) == ["protocol", "instance", "root"])
     }
 
     @Test

@@ -1,7 +1,7 @@
 import Foundation
 
-// The Ambient Context Protocol's types, version 0.2.0 (RFC-0001, the
-// element model; RFC-0003, the hovered state), and the interface an app
+// The Ambient Context Protocol's types, version 0.2.1 (RFC-0001, the
+// element model; RFC-0003, the hovered state; RFC-0005, display), and the interface an app
 // implements to be a provider: `ContextProvider` to say what the user
 // has open and selected, and `ContextLocator` as well if it can also say
 // where an element is on screen.
@@ -162,6 +162,57 @@ public struct ContextElement: Equatable, Sendable, Encodable {
     }
 }
 
+/// The app's own words for what an answer holds, for the line a host
+/// shows the user: `release-runbook.md · lines 12–18`. Optional. A host
+/// that gets none words the line itself from the tree.
+///
+/// It labels the answer it is sent with: it names nothing the tree does
+/// not hold. The picture a host draws beside it is not sent; it is the
+/// file `Contents/Resources/favicon.svg` (or `favicon.png`) in the app's
+/// bundle, which the host finds itself.
+public struct ContextDisplay: Equatable, Sendable, Encodable {
+    /// The longest line the protocol allows, in characters.
+    public static let lineLimit = 80
+
+    /// What is open: the document, the view, the thread.
+    public var title: String?
+    /// What is selected or in focus within it: `lines 12–18`, `3 tasks`.
+    public var detail: String?
+
+    public init(title: String? = nil, detail: String? = nil) {
+        self.title = title
+        self.detail = detail
+    }
+
+    /// What is sent: each string on one line of at most 80 characters,
+    /// or nil when there is no title, since a host uses `display` only
+    /// when it has one.
+    var sent: ContextDisplay? {
+        guard let title = title.flatMap(Self.line) else { return nil }
+        return ContextDisplay(title: title, detail: detail.flatMap(Self.line))
+    }
+
+    /// One line of plain text: line breaks and control characters become
+    /// spaces, runs of spaces become one, and a line over the limit is
+    /// cut and ends in an ellipsis. Nil when nothing is left.
+    static func line(_ text: String) -> String? {
+        let spaced = String(String.UnicodeScalarView(text.unicodeScalars.map { scalar in
+            scalar.properties.generalCategory == .control || scalar == "\u{2028}" || scalar == "\u{2029}" ? " " : scalar
+        }))
+        let line = spaced.split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ")
+        if line.isEmpty { return nil }
+        return line.count <= lineLimit ? line : String(line.prefix(lineLimit - 1)) + "…"
+    }
+
+    private enum Key: String, CodingKey { case title, detail }
+
+    public func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: Key.self)
+        try values.encodeIfPresent(title, forKey: .title)
+        try values.encodeIfPresent(detail, forKey: .detail)
+    }
+}
+
 /// Something wrong with a tree that can be told from the tree alone.
 public struct ContextIssue: Equatable, Sendable {
     /// An `error` is an answer a host may refuse or misread.
@@ -282,6 +333,16 @@ public protocol ContextProvider: AnyObject, Sendable {
     /// from state already in memory. The server adds the protocol
     /// version and the instance.
     func current() -> ContextElement
+
+    /// The app's own words for what `current()` holds, or nil to let the
+    /// host word it. Called on the main actor straight after `current()`,
+    /// with nothing in between, so the two describe the same moment.
+    /// Optional: the default is nil.
+    func display() -> ContextDisplay?
+}
+
+extension ContextProvider {
+    public func display() -> ContextDisplay? { nil }
 }
 
 /// A provider that can also say where an element is on screen. Optional:

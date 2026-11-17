@@ -1,5 +1,6 @@
 import { social } from '@/lib/social';
-import { markdownUrl, source } from '@/lib/source';
+import { markdownUrl } from '@/lib/llm';
+import { source } from '@/lib/source';
 import { DocsBody, DocsDescription, DocsPage, DocsTitle } from 'fumadocs-ui/layouts/notebook/page';
 import { notFound } from 'next/navigation';
 import { getMDXComponents } from '@/mdx-components';
@@ -43,5 +44,7 @@ export async function generateMetadata(props: PageProps<'/[...slug]'>): Promise<
     title: page.data.title,
     description: page.data.description,
     ...social({ title: page.data.title, description: page.data.description, path: page.url }),
+    // Tells a program reading the page where its plain Markdown is.
+    alternates: { types: { 'text/markdown': markdownUrl(page) } },
   };
 }

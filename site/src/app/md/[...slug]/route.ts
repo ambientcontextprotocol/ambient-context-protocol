@@ -1,4 +1,5 @@
-import { getLLMText, markdownUrl, source } from '@/lib/source';
+import { getLLMText, markdownUrl } from '@/lib/llm';
+import { source } from '@/lib/source';
 import { notFound } from 'next/navigation';
 
 // Each page's Markdown as a static file: `/docs/concepts` is at `/md/docs/concepts.md`. The `.md` ending is part of the last path segment, so the export writes a real `.md` file that a static host serves as text.

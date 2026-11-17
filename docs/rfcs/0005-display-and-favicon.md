@@ -5,9 +5,9 @@
 | Field | Value |
 |---|---|
 | Author | The protocol session, for Andrew Jones |
-| Status | Draft |
+| Status | Accepted |
 | Created | `2026.11.17` |
-| Decided | |
+| Decided | `2026.11.17` |
 | Discussion | Not yet opened as a pull request |
 | Specification sections | 4.1 (the answer to `current`), new 4.3 and 8.2, 8.1 (the macOS profile), 9.1 and 9.2 (rules), 10 (the version) |
 | Version effect | Additive: `0.2.0` to `0.2.1` |
@@ -110,4 +110,6 @@ PR-047 (exactly three fields) and PR-066 (the version `0.2.0` in three places) a
 
 ## 10. Decision and outcome
 
-Pending.
+Accepted on 2026.11.17 by Andrew Jones, maintainer, on the revision of commit `1d7d19a`, for protocol version `0.2.1`.
+
+Why: a host must show what it collected, and the app can word that line better than the host can. It is optional and additive, and the released first-party host already reads any `0.2.x` provider. The open questions in section 9 stay open during implementation.

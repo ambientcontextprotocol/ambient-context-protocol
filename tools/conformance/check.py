@@ -16,10 +16,20 @@ url or attributes. A result holds ids, roles, counts and status codes.
 Usage:
     python3 tools/conformance/check.py <descriptor.json>
     python3 tools/conformance/check.py --endpoint URL --token T [--instance I] [--pid N]
+    python3 tools/conformance/check.py <descriptor.json> --watch-hold 20
+
+A provider's own test can reuse the watch client here, and the three
+helpers that need the app driven while a watch is open:
+
+    with check.Watch.from_descriptor(path) as watch:
+        check.drive_changes(watch, select_another_paragraph, results)
+        check.drive_hover(watch, move_the_pointer, results)
+        check.drive_stop(watch, turn_the_provider_off, results)
 
 Python 3 standard library only.
 """
 import argparse
+import codecs
 import http.client
 import json
 import os
@@ -28,6 +38,7 @@ import secrets
 import socket
 import stat
 import sys
+import threading
 import time
 from urllib.parse import urlsplit
 
@@ -40,6 +51,19 @@ LOCATION_TEMPLATE = "ambient://location/{id}"
 LOCATION_PREFIX = "ambient://location/"
 META_VERSION = "io.modelcontextprotocol/protocolVersion"
 META_CAPABILITIES = "io.modelcontextprotocol/clientCapabilities"
+META_SUBSCRIPTION = "io.modelcontextprotocol/subscriptionId"
+LISTEN = "subscriptions/listen"
+ACKNOWLEDGED = "notifications/subscriptions/acknowledged"
+UPDATED = "notifications/resources/updated"
+# Section 9.1: at most one notice in any 250 ms on a watch, and a comment
+# line on a quiet one at least every 15 seconds. The tolerances allow for
+# the scheduling of two programs on one machine.
+COALESCE = 0.25
+COALESCE_TOLERANCE = 0.05
+KEEPALIVE = 15.0
+KEEPALIVE_TOLERANCE = 0.25
+HEAD_LIMIT = 1 << 16
+BODY_LIMIT = 1 << 20
 
 ROLES = (
     "Application", "Window", "Group", "List", "Table", "Row", "Cell",
@@ -272,6 +296,455 @@ class Client:
         if header is not None:
             headers["MCP-Protocol-Version"] = header
         return self.send("POST", headers, json.dumps(message).encode("utf-8"))
+
+
+    def watch(self, notifications=None, *, token=OMIT, extra_headers=None):
+        """Opens a watch as a host does, and keeps its response's headers."""
+        self._next_id += 1
+        watch = Watch(self.host, self.port, self.path, self.token if token is OMIT else token,
+                      timeout=self.timeout, notifications=notifications, request_id=self._next_id,
+                      headers=extra_headers).open()
+        self.seen.append(watch.response)
+        return watch
+
+
+# ------------------------------------------------------------- the watch
+
+class Event:
+    """One thing read from a watch's stream, and when.
+
+    `kind` is "comment", "message" (a JSON object, in `message`) or
+    "invalid" (data that is not a JSON object). `at` is time.monotonic()
+    when its last byte arrived.
+    """
+    __slots__ = ("kind", "at", "message")
+
+    def __init__(self, kind, at, message=None):
+        self.kind, self.at, self.message = kind, at, message
+
+    @property
+    def method(self):
+        return self.message.get("method") if self.kind == "message" else None
+
+
+class Framing:
+    """Takes a response body out of its HTTP framing, a piece at a time."""
+
+    def __init__(self, chunked, length):
+        self.chunked, self.remaining = chunked, length
+        self.buffer, self.left = b"", 0
+
+    def feed(self, data):
+        """Returns (the body bytes in `data`, whether the body is complete)."""
+        if not self.chunked:
+            if self.remaining is None:
+                return data, False  # The body ends when the connection does.
+            data = data[:self.remaining]
+            self.remaining -= len(data)
+            return data, self.remaining == 0
+        self.buffer += data
+        out = []
+        while True:
+            if self.left == 0:
+                end = self.buffer.find(b"\r\n")
+                if end < 0:
+                    return b"".join(out), False
+                line, self.buffer = self.buffer[:end], self.buffer[end + 2:]
+                if not line:
+                    continue  # The line break that closes a chunk.
+                self.left = int(line.split(b";")[0].strip(), 16)
+                if self.left == 0:
+                    return b"".join(out), True
+            piece = self.buffer[:self.left]
+            if not piece:
+                return b"".join(out), False
+            out.append(piece)
+            self.buffer = self.buffer[len(piece):]
+            self.left -= len(piece)
+
+
+class Watch:
+    """A client for one watch: `subscriptions/listen`, held open (section 7.7).
+
+    `open()` sends the request and reads the response's head. If the answer
+    is an event stream, `streaming` is true and a thread reads events into
+    `events`, each stamped as it arrives, until the stream ends or
+    `close()` is called. Otherwise `response` holds the whole answer.
+
+    Nothing here prints. A caller reports counts and times, never a
+    message's contents.
+    """
+
+    def __init__(self, host, port, path, token, *, timeout=5.0, notifications=None, request_id=1, headers=None):
+        self.host, self.port, self.path, self.token, self.timeout = host, port, path, token, timeout
+        self.notifications = {"resourceSubscriptions": [CURRENT_URI]} if notifications is None else notifications
+        self.request_id = request_id
+        self.extra_headers = dict(headers or {})
+        self.response = Response(failure="not opened")
+        self.streaming = False
+        self.opened_at = None
+        self.ended = False
+        self.ended_at = None
+        self.failure = None  # Why the stream ended, when it was not closed in order.
+        self.events = []
+        self._changed = threading.Condition()
+        self._socket = None
+        self._reader = None
+        self._closing = False
+        self._framing = None
+        self._decoder = codecs.getincrementaldecoder("utf-8")("replace")
+        self._text = ""
+        self._data = []
+
+    @classmethod
+    def at(cls, endpoint, token, **options):
+        """A watch on an endpoint on this machine. The token goes nowhere else."""
+        host, port, path, _address, _path = parse_endpoint(endpoint)
+        if host not in LOOPBACK_NAMES or port is None or not path:
+            raise ValueError("the endpoint is not an address on this machine")
+        if "?" in endpoint:
+            path += "?" + urlsplit(endpoint).query
+        return cls(host, port, path, token, **options)
+
+    @classmethod
+    def from_descriptor(cls, descriptor_path, **options):
+        with open(descriptor_path, "rb") as handle:
+            descriptor = json.loads(handle.read().decode("utf-8"))
+        return cls.at(descriptor.get("endpoint"), descriptor.get("token"), **options)
+
+    def __enter__(self):
+        return self.open() if self.response.failure == "not opened" else self
+
+    def __exit__(self, *_):
+        self.close()
+
+    # -- opening
+
+    def open(self):
+        """Sends the request. Returns the watch; see `streaming` and `response`."""
+        body = json.dumps({"jsonrpc": "2.0", "id": self.request_id, "method": LISTEN, "params": {
+            "_meta": {META_VERSION: MCP_VERSION, META_CAPABILITIES: {}},
+            "notifications": self.notifications,
+        }}).encode("utf-8")
+        headers = {
+            "Host": "%s:%d" % (self.host, self.port), "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream", "MCP-Protocol-Version": MCP_VERSION,
+            "Mcp-Method": LISTEN, "Content-Length": str(len(body)), "Connection": "close",
+        }
+        if self.token is not None:
+            headers["Authorization"] = "Bearer " + self.token
+        headers.update(self.extra_headers)
+        request = "POST %s HTTP/1.1\r\n" % self.path + "".join("%s: %s\r\n" % pair for pair in headers.items()) + "\r\n"
+
+        started = time.monotonic()
+        deadline = started + self.timeout
+        connection = None
+        try:
+            connection = socket.create_connection((self.host, self.port), timeout=self.timeout)
+            connection.sendall(request.encode("latin-1") + body)
+            head, rest = self._read_head(connection, deadline)
+            status, found = self._parse_head(head)
+            named = {name.lower(): value for name, value in found}
+            encoding = named.get("transfer-encoding", "").lower()
+            length = named.get("content-length")
+            self._framing = Framing("chunked" in encoding, int(length) if length is not None and not encoding else None)
+            if status == 200 and named.get("content-type", "").lower().startswith("text/event-stream"):
+                self.response = Response(status, found, seconds=time.monotonic() - started)
+                self.streaming = True
+                self.opened_at = time.monotonic()
+                connection.settimeout(None)
+                self._socket = connection
+                self._reader = threading.Thread(target=self._read, args=(connection, rest), daemon=True)
+                self._reader.start()
+                return self
+            whole = self._read_body(connection, rest, deadline)
+            self.response = Response(status, found, whole, seconds=time.monotonic() - started)
+        except (OSError, ValueError) as error:
+            reason = "timed out" if isinstance(error, socket.timeout) else type(error).__name__
+            self.response = Response(failure=reason, seconds=time.monotonic() - started)
+        if connection is not None:
+            connection.close()
+        self.ended, self.ended_at = True, time.monotonic()
+        return self
+
+    @staticmethod
+    def _receive(connection, deadline):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise socket.timeout()
+        connection.settimeout(remaining)
+        return connection.recv(65536)
+
+    def _read_head(self, connection, deadline):
+        data = b""
+        while b"\r\n\r\n" not in data:
+            if len(data) > HEAD_LIMIT:
+                raise ValueError("the response's head is too long")
+            piece = self._receive(connection, deadline)
+            if not piece:
+                raise ConnectionError("closed before a response")
+            data += piece
+        head, _separator, rest = data.partition(b"\r\n\r\n")
+        return head, rest
+
+    @staticmethod
+    def _parse_head(head):
+        lines = head.decode("latin-1").split("\r\n")
+        parts = lines[0].split(" ", 2)
+        if len(parts) < 2 or not parts[0].startswith("HTTP/"):
+            raise ValueError("not an HTTP response")
+        found = []
+        for line in lines[1:]:
+            name, separator, value = line.partition(":")
+            if separator:
+                found.append((name.strip(), value.strip()))
+        return int(parts[1]), found
+
+    def _read_body(self, connection, rest, deadline):
+        """The whole body of an answer that is not a stream, within limits."""
+        whole, data = b"", rest
+        while True:
+            piece, complete = self._framing.feed(data) if data else (b"", self._framing.remaining == 0)
+            whole += piece
+            if complete or len(whole) > BODY_LIMIT:
+                return whole
+            try:
+                data = self._receive(connection, deadline)
+            except socket.timeout:
+                return whole
+            if not data:
+                return whole
+
+    # -- reading
+
+    def _read(self, connection, data):
+        try:
+            while True:
+                if data:
+                    now = time.monotonic()
+                    piece, complete = self._framing.feed(data)
+                    self._parse(piece, now)
+                    if complete:
+                        break
+                data = connection.recv(65536)
+                if not data:
+                    break
+        except (OSError, ValueError) as error:
+            if not self._closing:
+                self.failure = type(error).__name__
+        with self._changed:
+            self.ended, self.ended_at = True, time.monotonic()
+            self._changed.notify_all()
+
+    def _parse(self, data, now):
+        self._text += self._decoder.decode(data)
+        while "\n" in self._text:
+            line, self._text = self._text.split("\n", 1)
+            line = line.rstrip("\r")
+            if line.startswith(":"):
+                self._add(Event("comment", now))
+            elif line.startswith("data:"):
+                self._data.append(line[5:][1:] if line[5:6] == " " else line[5:])
+            elif not line and self._data:
+                text, self._data = "\n".join(self._data), []
+                try:
+                    message = json.loads(text)
+                except ValueError:
+                    message = None
+                self._add(Event("message", now, message) if isinstance(message, dict) else Event("invalid", now))
+
+    def _add(self, event):
+        with self._changed:
+            self.events.append(event)
+            self._changed.notify_all()
+
+    # -- what was seen
+
+    def snapshot(self):
+        with self._changed:
+            return list(self.events)
+
+    def messages(self):
+        """The events that are not comments, in order."""
+        return [event for event in self.snapshot() if event.kind != "comment"]
+
+    def first_message(self, timeout=None):
+        """The first message on the stream, waiting for it, or None."""
+        self._wait(lambda: any(event.kind != "comment" for event in self.events), timeout)
+        found = self.messages()
+        return found[0] if found else None
+
+    def notice_times(self, since=None):
+        """When each `notifications/resources/updated` arrived, from `since` on."""
+        return [event.at for event in self.snapshot()
+                if event.method == UPDATED and (since is None or event.at >= since)]
+
+    def wait_notice(self, since, timeout):
+        """When the first notice at or after `since` arrived, or None."""
+        self._wait(lambda: any(event.method == UPDATED and event.at >= since for event in self.events), timeout)
+        found = self.notice_times(since)
+        return found[0] if found else None
+
+    def collect(self, seconds):
+        """Lets the stream run for `seconds`, or until it ends."""
+        self.wait_end(seconds)
+
+    def wait_end(self, timeout):
+        """Whether the stream has ended, waiting up to `timeout` for it."""
+        self._wait(lambda: False, timeout)
+        return self.ended
+
+    @property
+    def completed(self):
+        """Whether the provider ended the watch with a completion result."""
+        return any(is_completion(event, self.request_id) for event in self.snapshot())
+
+    def _wait(self, test, timeout):
+        """Until `test` holds, the stream ends or `timeout` passes."""
+        deadline = time.monotonic() + (self.timeout if timeout is None else timeout)
+        with self._changed:
+            while not self.ended and not test():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return
+                self._changed.wait(remaining)
+
+    def close(self):
+        """Ends the watch from the host's side."""
+        self._closing = True
+        if self._socket is not None:
+            try:
+                self._socket.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            self._socket.close()
+            self._socket = None
+        if self._reader is not None:
+            self._reader.join(1.0)
+            self._reader = None
+
+
+def is_completion(event, subscription):
+    if event.kind != "message" or "method" in event.message or not same_id(event.message.get("id"), subscription):
+        return False
+    result = event.message.get("result")
+    return isinstance(result, dict) and result.get("resultType") == "complete"
+
+
+def same_id(found, expected):
+    return type(found) is type(expected) and found == expected
+
+
+def several(count, word):
+    return "%d %s%s" % (count, word, "" if count == 1 else "s")
+
+
+def acknowledgment_problems(event, subscription):
+    """What is wrong with a watch's first message (section 7.7). Counts only."""
+    if event is None:
+        return ["no message arrived on the stream"]
+    if event.kind != "message":
+        return ["the first message is not a JSON object"]
+    if event.method == UPDATED:
+        return ["the first message is a notice, not the acknowledgment"]
+    if event.method != ACKNOWLEDGED:
+        return ["the first message is not the acknowledgment"]
+    params = event.message.get("params")
+    if not isinstance(params, dict):
+        return ["the acknowledgment has no params"]
+    problems = []
+    meta = params.get("_meta")
+    if not isinstance(meta, dict) or not same_id(meta.get(META_SUBSCRIPTION), subscription):
+        problems.append("its subscription id is not the request's id")
+    agreed = params.get("notifications")
+    if not isinstance(agreed, dict):
+        return problems + ["it names no filter"]
+    addresses = agreed.get("resourceSubscriptions")
+    if not isinstance(addresses, list):
+        problems.append("its resourceSubscriptions is not a list")
+    elif addresses != [CURRENT_URI]:
+        others = sum(1 for address in addresses if address != CURRENT_URI)
+        if others:
+            problems.append("it names %s beside %s" % (several(others, "address"), CURRENT_URI)
+                            if CURRENT_URI in addresses else "it does not name %s" % CURRENT_URI)
+        else:
+            problems.append("it names %s %d times" % (CURRENT_URI, len(addresses)))
+    more = sum(1 for name, value in agreed.items() if name != "resourceSubscriptions" and value)
+    if more:
+        problems.append("it agrees to %s of notification beside resource updates" % several(more, "other kind"))
+    return problems
+
+
+def notice_problems(message, subscription):
+    """What is wrong with a notice (PR-082). Counts fields; quotes nothing."""
+    problems = []
+    extra = len(set(message) - {"jsonrpc", "method", "params"})
+    if extra:
+        problems.append("%s beside jsonrpc, method and params" % several(extra, "extra field"))
+    params = message.get("params")
+    if not isinstance(params, dict):
+        return problems + ["params is not an object"]
+    if params.get("uri") != CURRENT_URI:
+        problems.append("its uri is not %s" % CURRENT_URI)
+    extra = len(set(params) - {"uri", "_meta"})
+    if extra:
+        problems.append("%s in params beside uri and _meta" % several(extra, "extra field"))
+    meta = params.get("_meta")
+    if not isinstance(meta, dict) or not same_id(meta.get(META_SUBSCRIPTION), subscription):
+        problems.append("its subscription id is not the request's id")
+    elif len(meta) > 1:
+        problems.append("%s in _meta beside the subscription id" % several(len(meta) - 1, "extra field"))
+    return problems
+
+
+def stream_problems(events, subscription):
+    """Everything on a watch's stream that the host did not ask for.
+
+    Returns (problems, number of notices). The first message is judged by
+    `acknowledgment_problems`; here it only has to be one of the kinds
+    a watch may carry.
+    """
+    problems, notices, position = [], 0, 0
+    for event in events:
+        if event.kind == "comment":
+            continue
+        position += 1
+        if event.kind != "message":
+            problems.append("message %d is not a JSON object" % position)
+        elif event.method == UPDATED:
+            notices += 1
+            problems += ["notice %d: %s" % (notices, problem) for problem in notice_problems(event.message, subscription)]
+        elif event.method == ACKNOWLEDGED:
+            if position != 1:
+                problems.append("message %d is a second acknowledgment" % position)
+        elif is_completion(event, subscription):
+            pass
+        elif "method" in event.message:
+            problems.append("message %d is a notification of a type that was not asked for" % position)
+        else:
+            problems.append("message %d is a response that is not this watch's completion" % position)
+    return problems, notices
+
+
+def closest(times):
+    """The smallest gap between consecutive times, or None."""
+    gaps = [later - earlier for earlier, later in zip(times, times[1:])]
+    return min(gaps) if gaps else None
+
+
+def coalescing_result(times, name="watch-coalesced"):
+    """PR-083's first half, on the notices that were seen."""
+    if not times:
+        return PASS, "PR-083", name, "no change happened while watching, so no notice was seen"
+    gap = closest(times)
+    limit = COALESCE - COALESCE_TOLERANCE
+    if gap is not None and gap < limit:
+        near = sum(1 for earlier, later in zip(times, times[1:]) if later - earlier < limit)
+        return FAIL, "PR-083", name, "%s, %d of them less than %d ms after the one before; the closest %d ms" % (
+            several(len(times), "notice"), near, int(COALESCE * 1000), int(gap * 1000))
+    if gap is None:
+        return PASS, "PR-083", name, "1 notice seen"
+    return PASS, "PR-083", name, "%d notices, none closer than %d ms" % (len(times), int(gap * 1000))
 
 
 # ---------------------------------------------------------- the descriptor
@@ -711,9 +1184,14 @@ def complete(result):
 
 
 def check_reads(client, results, expected_instance, slow):
-    """Sections 7.2 and 7.3, then the answer itself. Returns (root, locate offered)."""
+    """Sections 7.2 and 7.3, then the answer itself.
+
+    Returns (root, locate offered, watch declared). The last is None when
+    server/discover was not answered.
+    """
     response = client.rpc("server/discover")
     result = response.result()
+    watch = None
     if response.status != 200 or result is None:
         results.add(FAIL, "PR-026", "discover", response.describe())
         results.add(SKIP, "PR-092", "discover-extension", "server/discover was not answered")
@@ -725,6 +1203,8 @@ def check_reads(client, results, expected_instance, slow):
         capabilities = result.get("capabilities") if isinstance(result.get("capabilities"), dict) else {}
         if not isinstance(capabilities.get("resources"), dict):
             problems.append("capabilities has no resources object")
+        else:
+            watch = capabilities["resources"].get("subscribe") is True
         results.judge("PR-026", "discover", problems, "names MCP %s and offers resources" % MCP_VERSION)
         results.add(*extension_result(capabilities.get("extensions"), "PR-092", "discover-extension", "capabilities.extensions"))
 
@@ -770,7 +1250,7 @@ def check_reads(client, results, expected_instance, slow):
         for requirement, name in [("PR-072", "current-fields"), ("PR-092", "current-protocol"),
                                   ("PR-040", "current-instance"), ("PR-074", "current-display")] + tree_checks + [("PR-004", "current-time")]:
             results.add(SKIP if answer is None else FAIL, requirement, name, reason)
-        return None, locate
+        return None, locate, watch
 
     keys = set(answer)
     problems = ["'%s' is missing" % name for name in ("protocol", "instance", "root") if name not in keys]
@@ -816,7 +1296,7 @@ def check_reads(client, results, expected_instance, slow):
         results.add(WARN, "PR-004", "current-time", "answered in %d ms, over the %d ms this run allows" % (milliseconds, int(slow * 1000)))
     else:
         results.add(PASS, "PR-004", "current-time", "answered in %d ms" % milliseconds)
-    return (root if isinstance(root, dict) else None), locate
+    return (root if isinstance(root, dict) else None), locate, watch
 
 
 def extension_result(holder, requirement, name, where):
@@ -873,6 +1353,217 @@ def check_locate(client, results, root, offered, limit):
     response = client.rpc("resources/read", {"uri": LOCATION_PREFIX + never})
     results.add(PASS if response.error_code() == -32602 else FAIL, "PR-060", "locate-never-issued",
                 "an id never issued: " + response.describe())
+
+
+WATCH_CHECKS = [
+    ("PR-080", "watch-served"), ("PR-080", "watch-acknowledged"), ("PR-080", "watch-filter-narrowed"),
+    ("PR-082", "watch-filter-refused"), ("PR-087", "watch-token"), ("PR-087", "watch-origin"),
+    ("PR-082", "watch-notices"), ("PR-083", "watch-coalesced"), ("PR-085", "watch-keepalive"),
+]
+
+
+def describe_watch(watch):
+    """What a watch request got, in status codes only."""
+    return "HTTP 200, an event stream" if watch.streaming else watch.response.describe()
+
+
+def skip_watch(results, reason, done=()):
+    for requirement, name in WATCH_CHECKS:
+        if name not in done:
+            results.add(SKIP, requirement, name, reason)
+
+
+def check_watch(client, results, declared, hold, keepalive=KEEPALIVE):
+    """Sections 4.4 and 7.7: the watch on current (RFC-0006).
+
+    One watch is opened and held for `hold` seconds while the rest is
+    asked. Only what arrives is judged: a real app sends a notice only if
+    the user changes something in that time.
+    """
+    if declared is None:
+        skip_watch(results, "server/discover was not answered")
+        return
+    watch = client.watch()
+    try:
+        if not declared:
+            if watch.streaming:
+                results.add(FAIL, "PR-081", "watch-not-offered",
+                            "resources.subscribe is not declared and %s opens an event stream" % LISTEN)
+            elif watch.response.refused_with(404, -32601):
+                results.add(PASS, "PR-081", "watch-not-offered",
+                            "no subscribe is declared; %s: %s" % (LISTEN, describe_watch(watch)))
+            else:
+                results.add(FAIL, "PR-081", "watch-not-offered",
+                            "no subscribe is declared; %s: %s, expected HTTP 404, error -32601" % (LISTEN, describe_watch(watch)))
+            skip_watch(results, "the provider does not offer watch")
+            return
+
+        if watch.streaming:
+            results.add(PASS, "PR-080", "watch-served", "resources.subscribe is declared and %s opens an event stream" % LISTEN)
+            first = watch.first_message(client.timeout)
+            results.judge("PR-080", "watch-acknowledged", acknowledgment_problems(first, watch.request_id),
+                          "the first message, naming %s alone and the request's id" % CURRENT_URI)
+            check_watch_filters(client, results)
+        else:
+            results.add(FAIL, "PR-080", "watch-served",
+                        "resources.subscribe is declared; %s: %s" % (LISTEN, describe_watch(watch)))
+        check_watch_refusals(client, results)
+        if not watch.streaming:
+            skip_watch(results, "the watch did not open", done=("watch-served", "watch-token", "watch-origin"))
+            return
+
+        watch.collect(hold)
+        ended = watch.ended  # Read before the time, so that an end is never dated late.
+        until = watch.ended_at if ended else time.monotonic()
+        events = watch.snapshot()
+        problems, notices = stream_problems(events, watch.request_id)
+        if notices:
+            passed = "%s, each for %s with the subscription id and nothing else" % (several(notices, "notice"), CURRENT_URI)
+        else:
+            passed = "no change happened while watching, so no notice was seen"
+        results.judge("PR-082", "watch-notices", problems, passed)
+        results.add(*coalescing_result([event.at for event in events if event.method == UPDATED]))
+        results.add(*keepalive_result(watch, events, until, ended, hold, keepalive))
+    finally:
+        watch.close()
+
+
+def check_watch_filters(client, results):
+    """Section 7.7: what a provider does with a filter that asks for more, or for something else."""
+    wide = {"resourceSubscriptions": [CURRENT_URI, LOCATION_PREFIX + "x"],
+            "toolsListChanged": True, "promptsListChanged": True, "resourcesListChanged": True}
+    other = client.watch(wide)
+    try:
+        if other.streaming:
+            problems = acknowledgment_problems(other.first_message(client.timeout), other.request_id)
+        else:
+            problems = [describe_watch(other)]
+    finally:
+        other.close()
+    results.judge("PR-080", "watch-filter-narrowed", ["asked for a location and list changes too: " + summarize(problems)] if problems else [],
+                  "a filter that asks for a location and list changes too is acknowledged for %s alone" % CURRENT_URI)
+
+    cases = [
+        ("a filter that names a location only", {"resourceSubscriptions": [LOCATION_PREFIX + "x"]}),
+        ("a filter that asks for list changes only", {"resourcesListChanged": True}),
+    ]
+    problems = []
+    for what, notifications in cases:
+        other = client.watch(notifications)
+        other.close()
+        if other.streaming or not other.response.refused_with(400, -32602):
+            problems.append("%s: %s" % (what, describe_watch(other)))
+    results.judge("PR-082", "watch-filter-refused", problems,
+                  "400 with -32602 for two filters that do not name %s" % CURRENT_URI)
+
+
+def check_watch_refusals(client, results):
+    """Section 7.1: the token and Origin rules, before any stream opens."""
+    problems = []
+    for what, token in (("no Authorization header", None), ("a different token", secrets.token_urlsafe(24))):
+        other = client.watch(token=token)
+        other.close()
+        if other.response.status != 401:
+            problems.append("%s: %s" % (what, describe_watch(other)))
+    results.judge("PR-087", "watch-token", problems, "401 and no stream, with no token and with a wrong one")
+
+    other = client.watch(extra_headers={"Origin": "http://localhost:3000"})
+    other.close()
+    results.judge("PR-087", "watch-origin", [] if other.response.status == 403 else [describe_watch(other)],
+                  "403 and no stream, with the right token and an Origin header")
+
+
+def keepalive_result(watch, events, until, ended, hold, keepalive=KEEPALIVE):
+    """PR-085: on a held watch, something arrives at least every `keepalive` seconds."""
+    again = "pass --watch-hold %d to judge it" % (KEEPALIVE + 5)
+    if hold <= 0:
+        return SKIP, "PR-085", "watch-keepalive", "the watch was not held open; " + again
+    start = events[0].at if events else watch.opened_at
+    times = [start] + [event.at for event in events if event.at > start] + [until]
+    held = until - start
+    if held < keepalive + KEEPALIVE_TOLERANCE:
+        if ended:
+            return SKIP, "PR-085", "watch-keepalive", "the provider ended the watch after %.1f s, too soon to judge" % held
+        return SKIP, "PR-085", "watch-keepalive", "held for %.1f s, too short to judge a comment line every %g s; %s" % (held, keepalive, again)
+    silence = max(later - earlier for earlier, later in zip(times, times[1:]))
+    if silence > keepalive + KEEPALIVE_TOLERANCE:
+        return FAIL, "PR-085", "watch-keepalive", "nothing on the stream for %.1f s; a comment line is due at least every %g s" % (silence, keepalive)
+    comments = sum(1 for event in events if event.kind == "comment")
+    notices = sum(1 for event in events if event.method == UPDATED)
+    return PASS, "PR-085", "watch-keepalive", "%s and %s in %.1f s; the longest silence %.1f s" % (
+        several(comments, "comment line"), several(notices, "notice"), held, silence)
+
+
+# ------------------------------------------- checks that need the app driven
+
+def drive_changes(watch, change, results, burst=None, wait=1.0, window=COALESCE + 0.2):
+    """PR-084's second half and PR-083, for a test that can change the app.
+
+    `change()` must make one real change to the answer to current, such
+    as selecting something else, and return. `burst()`, if given, must
+    make several at once. Nothing else may change the app meanwhile. The
+    watch must be open and acknowledged.
+
+    Adds `watch-change-noticed` (a change is followed by a notice),
+    `watch-trailing-notice` (a second change, made inside the 250 ms after
+    that notice, still gets its own: delayed, never dropped) and, with
+    `burst`, `watch-burst-coalesced` (no two notices closer than 250 ms).
+    """
+    began = time.monotonic()
+    change()
+    first = watch.wait_notice(began, wait)
+    if first is None:
+        results.add(FAIL, "PR-084", "watch-change-noticed", "no notice within %g s of a change" % wait)
+        results.add(SKIP, "PR-083", "watch-trailing-notice", "the first change was not noticed")
+        if burst is not None:
+            results.add(SKIP, "PR-083", "watch-burst-coalesced", "the first change was not noticed")
+        return
+    results.add(PASS, "PR-084", "watch-change-noticed", "a notice %d ms after a change" % int((first - began) * 1000))
+
+    again = time.monotonic()
+    change()
+    last = watch.wait_notice(again, wait)
+    after = int((again - first) * 1000)
+    if last is None:
+        results.add(FAIL, "PR-083", "watch-trailing-notice",
+                    "a change made %d ms after a notice got no notice of its own within %g s" % (after, wait))
+    else:
+        results.add(PASS, "PR-083", "watch-trailing-notice",
+                    "a change made %d ms after a notice got its own %d ms later" % (after, int((last - again) * 1000)))
+
+    if burst is not None:
+        burst()
+        watch.collect(window)
+        results.add(*coalescing_result(watch.notice_times(began), "watch-burst-coalesced"))
+
+
+def drive_hover(watch, hover, results, settle=COALESCE + 0.1, quiet=0.6):
+    """PR-084's first half: `hover()` must change which element is hovered
+    and nothing else. Adds `watch-hover-silent`: no notice follows in `quiet`
+    seconds. `settle` lets a notice still owed for an earlier change arrive first.
+    """
+    watch.collect(settle)
+    began = time.monotonic()
+    hover()
+    watch.collect(quiet)
+    notices = len(watch.notice_times(began))
+    if notices:
+        results.add(FAIL, "PR-084", "watch-hover-silent", "%s within %g s of a change in hovered alone" % (several(notices, "notice"), quiet))
+    else:
+        results.add(PASS, "PR-084", "watch-hover-silent", "no notice in %g s after a change in hovered alone" % quiet)
+
+
+def drive_stop(watch, stop, results, wait=2.0):
+    """PR-086: `stop()` must quit the provider or turn it off. Adds
+    `watch-ends-at-stop`: the stream ends within `wait` seconds.
+    """
+    stop()
+    if not watch.wait_end(wait):
+        results.add(FAIL, "PR-086", "watch-ends-at-stop", "the stream was still open %g s after the provider stopped" % wait)
+    elif watch.completed:
+        results.add(PASS, "PR-086", "watch-ends-at-stop", "the stream ended with a completion result")
+    else:
+        results.add(PASS, "PR-086", "watch-ends-at-stop", "the stream was closed, with no completion result")
 
 
 def check_older_clients(client, results):
@@ -935,8 +1626,14 @@ def check_cors(client, results):
 # -------------------------------------------------------------------- run
 
 def run(descriptor_path=None, endpoint=None, token=None, instance=None, pid=None,
-        timeout=5.0, slow=1.0, locate_limit=25):
-    """Runs every check and returns the Results."""
+        timeout=5.0, slow=1.0, locate_limit=25, watch_hold=2.0, watch_keepalive=KEEPALIVE):
+    """Runs every check and returns the Results.
+
+    `watch_hold` is how long the watch is held open, in seconds. The
+    keep-alive rule is judged only when that is longer than
+    `watch_keepalive`, which is the specification's 15 seconds unless a
+    test of this script shortens it.
+    """
     results = Results()
     if descriptor_path is not None:
         descriptor = check_descriptor_file(descriptor_path, results)
@@ -969,8 +1666,9 @@ def run(descriptor_path=None, endpoint=None, token=None, instance=None, pid=None
     results.add(PASS, "PR-062", "endpoint-answers", "a POST is answered")
 
     check_refusals(client, results)
-    root, locate = check_reads(client, results, instance, slow)
+    root, locate, watch = check_reads(client, results, instance, slow)
     check_locate(client, results, root, locate, locate_limit)
+    check_watch(client, results, watch, watch_hold, watch_keepalive)
     check_older_clients(client, results)
     check_cors(client, results)
     return results
@@ -996,6 +1694,8 @@ def main(argv=None):
     parser.add_argument("--timeout", type=float, default=5.0, help="seconds to wait for each response (default 5)")
     parser.add_argument("--slow", type=float, default=1.0, help="seconds after which a current answer is warned about (default 1)")
     parser.add_argument("--locate-limit", type=int, default=25, help="how many ids to ask locate about (default 25)")
+    parser.add_argument("--watch-hold", type=float, default=2.0, metavar="SECONDS",
+                        help="seconds to hold a watch open and judge what arrives (default 2; 20 or more also judges the 15 s keep-alive)")
     arguments = parser.parse_args(argv)
 
     if arguments.descriptor and (arguments.endpoint or arguments.token):
@@ -1006,7 +1706,7 @@ def main(argv=None):
     results = run(
         descriptor_path=arguments.descriptor, endpoint=arguments.endpoint, token=arguments.token,
         instance=arguments.instance, pid=arguments.pid, timeout=arguments.timeout,
-        slow=arguments.slow, locate_limit=max(arguments.locate_limit, 1),
+        slow=arguments.slow, locate_limit=max(arguments.locate_limit, 1), watch_hold=max(arguments.watch_hold, 0.0),
     )
     if arguments.json:
         print(json.dumps({

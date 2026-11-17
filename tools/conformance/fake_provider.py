@@ -8,7 +8,13 @@ requirement the check can see.
 
     python3 tools/conformance/fake_provider.py --directory /tmp/acp/providers
     python3 tools/conformance/fake_provider.py --directory DIR --fault two-hovered
+    python3 tools/conformance/fake_provider.py --directory DIR --change-every 2
     python3 tools/conformance/fake_provider.py --list-faults
+
+It offers watch (RFC-0006) unless --no-watch is given. The tree is fixed
+until something changes it: --change-every on the command line, or the
+change(), hover() and burst() methods of a FakeProvider in a test. At exit
+it prints how many watches, reads of current and notices it saw.
 
 It never writes to the real descriptor folder: --directory is required and
 a path inside ~/Library/Application Support/AmbientContext is refused.
@@ -22,9 +28,13 @@ import datetime
 import hmac
 import json
 import os
+import queue
 import re
 import secrets
+import select
 import signal
+import socket
+import struct
 import sys
 import threading
 import time
@@ -40,13 +50,22 @@ LOCATION_PREFIX = "ambient://location/"
 META_VERSION = "io.modelcontextprotocol/protocolVersion"
 META_CAPABILITIES = "io.modelcontextprotocol/clientCapabilities"
 META_SERVER_INFO = "io.modelcontextprotocol/serverInfo"
+META_SUBSCRIPTION = "io.modelcontextprotocol/subscriptionId"
+LISTEN = "subscriptions/listen"
+ACKNOWLEDGED = "notifications/subscriptions/acknowledged"
+UPDATED = "notifications/resources/updated"
+COALESCE = 0.25  # Seconds: at most one notice in this long on one watch.
+KEEPALIVE = 10.0  # Seconds of quiet before a comment line; the rule is 15.
 ID_FORM = re.compile(r"\A[A-Za-z0-9_-]{1,128}\Z")
 BODY_LIMIT = 1 << 20
 DEAD_PID = 99999999  # Above any process id macOS or Linux hands out.
 REAL_FOLDER = os.path.join("~", "Library", "Application Support", "AmbientContext")
 
 # Each fault: what it does, the requirement it breaks, the checks of
-# check.py that report it, and how they report it.
+# check.py that report it, and how they report it. DRIVE marks a fault that
+# check.py's run cannot see, because the app must be made to change while a
+# watch is open: the named check belongs to one of check.py's drive_
+# helpers, which fails it.
 FAULTS = {
     # The descriptor (section 8).
     "descriptor-missing-field": ("the descriptor has no 'started'", "PR-018", ["descriptor-fields"], "FAIL"),
@@ -57,9 +76,9 @@ FAULTS = {
     "descriptor-protocol": ("the descriptor's protocol is 0.1", "PR-028", ["descriptor-protocol"], "FAIL"),
     "endpoint-localhost": ("the descriptor's endpoint names localhost, not 127.0.0.1", "PR-031", ["endpoint-address"], "FAIL"),
     # Refusals (section 7.4).
-    "no-token-check": ("any request is served, with or without the token", "PR-032", ["token-missing", "token-wrong"], "FAIL"),
+    "no-token-check": ("any request but a watch is served, with or without the token", "PR-032", ["token-missing", "token-wrong"], "FAIL"),
     "token-prefix": ("a token that begins with the right one is accepted", "PR-032", ["token-wrong"], "FAIL"),
-    "allow-origin": ("a request with an Origin header is served", "PR-033", ["origin-refused", "origin-before-token", "origin-options"], "FAIL"),
+    "allow-origin": ("a request with an Origin header is served, unless it opens a watch", "PR-033", ["origin-refused", "origin-before-token", "origin-options"], "FAIL"),
     "origin-after-token": ("the token is judged before the Origin header", "PR-033", ["origin-before-token", "origin-options"], "FAIL"),
     "origin-body": ("the 403 for an Origin header carries a body", "PR-033", ["origin-refused"], "FAIL"),
     "preflight-answered": ("a cross-origin OPTIONS is answered 204", "PR-033", ["origin-options"], "FAIL"),
@@ -105,6 +124,23 @@ FAULTS = {
     # Older clients (sections 7.1 and 7.6).
     "legacy-extension-misplaced": ("the initialize result declares the extension under capabilities.extensions", "PR-092", ["legacy-extension"], "FAIL"),
     "legacy-read-refused": ("an older client's resources/read is refused", "PR-025", ["legacy-read"], "FAIL"),
+    # Watching (section 4.4 and 7.7, RFC-0006).
+    "watch-declared-not-served": ("subscribe is declared and subscriptions/listen is answered 404", "PR-080", ["watch-served"], "FAIL"),
+    "watch-no-ack": ("a watch's first message is a notice; no acknowledgment is ever sent", "PR-080", ["watch-acknowledged", "watch-filter-narrowed"], "FAIL"),
+    "watch-ack-extra": ("the acknowledgment names a second address beside ambient://current", "PR-080", ["watch-acknowledged", "watch-filter-narrowed"], "FAIL"),
+    "watch-ack-echo": ("the acknowledgment repeats the filter asked for, other addresses and list changes included", "PR-080", ["watch-filter-narrowed"], "FAIL"),
+    "watch-undeclared": ("subscriptions/listen opens a stream and subscribe is not declared", "PR-081", ["watch-not-offered"], "FAIL"),
+    "watch-any-filter": ("a filter that does not name ambient://current opens a watch on it all the same", "PR-082", ["watch-filter-refused"], "FAIL"),
+    "watch-notice-content": ("a notice carries the new display", "PR-082", ["watch-notices"], "FAIL"),
+    "watch-wrong-uri": ("a notice names a location, not ambient://current", "PR-082", ["watch-notices"], "FAIL"),
+    "watch-flood": ("every change sends a notice at once, and a timed change is ten changes", "PR-083", ["watch-coalesced"], "FAIL"),
+    "watch-drops-last": ("a change inside the 250 ms after a notice is dropped, not delayed", "PR-083", ["watch-trailing-notice"], "DRIVE"),
+    "watch-no-notice": ("a change sends no notice", "PR-084", ["watch-change-noticed"], "DRIVE"),
+    "watch-hover-notice": ("a change in hovered alone sends a notice", "PR-084", ["watch-hover-silent"], "DRIVE"),
+    "watch-no-keepalive": ("a quiet watch carries no comment line", "PR-085", ["watch-keepalive"], "FAIL"),
+    "watch-left-open": ("stopping the provider leaves its watches open", "PR-086", ["watch-ends-at-stop"], "DRIVE"),
+    "watch-no-token-check": ("a watch is opened with or without the token", "PR-087", ["watch-token"], "FAIL"),
+    "watch-allows-origin": ("a watch is opened for a request with an Origin header", "PR-087", ["watch-origin"], "FAIL"),
     # Things a provider should do, and a slow answer: warned about, not failed.
     "no-ping": ("ping is not answered", "PR-026", ["ping"], "WARN"),
     "no-legacy": ("the initialize handshake is not answered", "PR-026", ["legacy-initialize"], "WARN"),
@@ -114,6 +150,8 @@ FAULTS = {
 # The app's words for the tree served (section 4.3). A host under test
 # should show these; with a display fault it should fall back to its own.
 DISPLAY = {"title": "Launch plan", "detail": "paragraph 2"}
+# The detail after an odd number of changes, when the comment is selected.
+CHANGED_DETAIL = "comment 1"
 
 # The tree served. Every optional field and every block type appears once.
 TREE = {
@@ -157,6 +195,8 @@ TREE = {
         ]},
     ],
 }
+
+TREE_WORDS = 412  # The document's word count before any change.
 
 # Where things are. An id in the tree and not here cannot be placed.
 LOCATIONS = {
@@ -240,14 +280,68 @@ def decoded_header(value):
     return value
 
 
+class Stream:
+    """In place of an Answer: the response is an event stream for this watch."""
+
+    def __init__(self, held):
+        self.held = held
+
+
+class Held:
+    """One open watch, as the provider holds it."""
+
+    END = object()  # Queued to end the watch with a completion result.
+
+    def __init__(self, subscription, agreed):
+        self.subscription = subscription
+        self.agreed = agreed
+        self.outbox = queue.SimpleQueue()
+        # Written to when the outbox gains something, so that the thread
+        # holding the watch can wait on it and on the host's socket at once.
+        self.woken, self._waker = socket.socketpair()
+        self.lock = threading.Lock()
+        self.opened = time.monotonic()
+        self.last_notice = float("-inf")
+        self.timer = None
+        self.done = threading.Event()
+
+    def put(self, item):
+        self.outbox.put(item)
+        try:
+            self._waker.send(b"!")
+        except OSError:
+            pass  # The watch has ended.
+
+    def close(self):
+        self.woken.close()
+        self._waker.close()
+
+
+def event(message):
+    return b"event: message\ndata: " + compact(message).encode("utf-8") + b"\n\n"
+
+
 class FakeProvider:
-    """The provider: a listener, a descriptor and the answers."""
+    """The provider: a listener, a descriptor and the answers.
+
+    For a host's author, the counters: `watches_open`, `watches_opened`,
+    `most_watches_open`, `longest_watch` (seconds), `reads_served`,
+    `most_reads_outstanding` and `notices_sent`. `counters()` gives them
+    all, and the command line prints them at exit.
+    """
 
     def __init__(self, directory, faults=(), delay=0.0, locate=True, redirect=False, keep_descriptor=False,
-                 path="/mcp", port=0, tree=None, app_id="org.example.fake-notes", display=True):
+                 path="/mcp", port=0, tree=None, app_id="org.example.fake-notes", display=True,
+                 watch=True, change_every=None, keepalive=KEEPALIVE, drop_watch_after=None):
         unknown = sorted(set(faults) - set(FAULTS))
         if unknown:
             raise ValueError("unknown fault: " + ", ".join(unknown))
+        if change_every is not None and not change_every > 0:
+            raise ValueError("the time between changes must be more than zero")
+        if keepalive is not None and not keepalive > 0:
+            raise ValueError("the keep-alive interval must be more than zero")
+        if drop_watch_after is not None and drop_watch_after < 0:
+            raise ValueError("the time before a watch is dropped cannot be negative")
         if not path.startswith("/") or "?" in path or "#" in path:
             raise ValueError("the path must begin with / and carry no query or fragment")
         real = os.path.realpath(os.path.expanduser(REAL_FOLDER))
@@ -268,10 +362,29 @@ class FakeProvider:
         self.token = secrets.token_urlsafe(32)
         self.instance = secrets.token_hex(8)
         self.root = build_tree(self.faults, tree)
+        self.custom_tree = tree is not None
         self.descriptor_path = None
         self.endpoint = None
         self._server = None
         self._thread = None
+        # Watching.
+        self.watch = watch
+        self.change_every = change_every
+        self.keepalive = None if "watch-no-keepalive" in self.faults else keepalive
+        self.drop_watch_after = drop_watch_after
+        self.changes = 0
+        self.watches_opened = 0
+        self.most_watches_open = 0
+        self.reads_served = 0
+        self.most_reads_outstanding = 0
+        self.notices_sent = 0
+        self._longest_ended = 0.0
+        self._reading = 0
+        self._watches = []
+        self._state = threading.Lock()  # The tree and its display.
+        self._counting = threading.Lock()  # The counters and the list of watches.
+        self._stopped = threading.Event()
+        self._changer = None
 
     # -- lifecycle
 
@@ -288,6 +401,22 @@ class FakeProvider:
 
             def serve(self):
                 answer = provider.respond(self.command, self.path, self.headers, self.rfile)
+                if isinstance(answer, Stream):
+                    # The one response that stays open (section 7.7).
+                    self.close_connection = True
+                    try:
+                        self.send_response(200)
+                        self.send_header("Content-Type", "text/event-stream")
+                        self.send_header("Cache-Control", "no-store")
+                        self.send_header("Connection", "close")
+                        if "cors-header" in provider.faults:
+                            self.send_header("Access-Control-Allow-Origin", "*")
+                        self.end_headers()
+                    except OSError:
+                        provider.release(answer.held)
+                        return
+                    provider.hold(answer.held, self.connection, self.wfile)
+                    return
                 if "cors-header" in provider.faults:
                     answer.headers["Access-Control-Allow-Origin"] = "*"
                 self.send_response(answer.status)
@@ -298,9 +427,12 @@ class FakeProvider:
                 for name, value in answer.headers.items():
                     self.send_header(name, value)
                 self.end_headers()
-                if self.command != "HEAD":
-                    self.wfile.write(answer.body)
                 self.close_connection = True
+                if self.command != "HEAD":
+                    try:
+                        self.wfile.write(answer.body)
+                    except OSError:
+                        pass  # The host gave up waiting and went away.
 
             do_GET = do_POST = do_PUT = do_DELETE = do_OPTIONS = do_HEAD = do_PATCH = serve
 
@@ -312,7 +444,17 @@ class FakeProvider:
         self._thread = threading.Thread(target=self._server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
         self._thread.start()
         self._write_descriptor()
+        if self.change_every is not None:
+            self._changer = threading.Thread(target=self._change_on_a_timer, daemon=True)
+            self._changer.start()
         return self.descriptor_path
+
+    def _change_on_a_timer(self):
+        while not self._stopped.wait(self.change_every):
+            if "watch-flood" in self.faults:
+                self.burst(10)
+            else:
+                self.change()
 
     def _write_descriptor(self):
         if not os.path.isdir(self.directory):
@@ -347,13 +489,21 @@ class FakeProvider:
         self.descriptor_path = final
 
     def stop(self):
-        """Removes the descriptor and closes the listener."""
+        """Removes the descriptor, ends every watch and closes the listener."""
+        self._stopped.set()
         if self.descriptor_path and not self.keep_descriptor:
             try:
                 os.remove(self.descriptor_path)
             except FileNotFoundError:
                 pass
         self.descriptor_path = None
+        if "watch-left-open" not in self.faults:
+            with self._counting:
+                watches = list(self._watches)
+            for held in watches:
+                held.put(Held.END)
+            for held in watches:
+                held.done.wait(2.0)
         if self._server is not None:
             self._server.shutdown()
             self._server.server_close()
@@ -366,7 +516,10 @@ class FakeProvider:
         has_origin = headers.get("Origin") is not None
         authorization = headers.get("Authorization")
         expected = "Bearer " + self.token
-        if "no-token-check" in faults:
+        # The method is known from its header before the body is read, so a
+        # fault can be confined to watch requests or to all the others.
+        watching = headers.get("Mcp-Method") == LISTEN
+        if ("watch-no-token-check" if watching else "no-token-check") in faults:
             authorized = True
         elif authorization is None:
             authorized = False
@@ -378,7 +531,7 @@ class FakeProvider:
         # Origin first, so that a web page learns nothing else.
         if "origin-after-token" in faults and not authorized:
             return Answer(401, headers={"WWW-Authenticate": "Bearer"})
-        if has_origin and "allow-origin" not in faults:
+        if has_origin and ("watch-allows-origin" if watching else "allow-origin") not in faults:
             if "preflight-answered" in faults and http_method == "OPTIONS":
                 return Answer(204)
             if "origin-body" in faults:
@@ -492,7 +645,8 @@ class FakeProvider:
             return success(identifier, legacy, {})
         if method == "server/discover" and not legacy:
             versions = LEGACY_VERSIONS if "no-discover-version" in faults else [MCP_VERSION] + LEGACY_VERSIONS
-            capabilities = {"resources": {}}
+            declared = self.watch and "watch-undeclared" not in faults
+            capabilities = {"resources": {"subscribe": True} if declared else {}}
             if "no-extension" not in faults:
                 capabilities["extensions"] = extension
             return success(identifier, False, {
@@ -525,6 +679,10 @@ class FakeProvider:
             entry = {"uri": uri, "mimeType": "text/plain" if current and "wrong-mime" in faults else "application/json", "text": text}
             contents = [entry, entry] if current and "two-contents" in faults else [entry]
             return success(identifier, legacy, {"contents": contents})
+        # An older client is not served watch (RFC-0006, section 5).
+        if method == LISTEN and not legacy and "watch-declared-not-served" not in faults \
+                and (self.watch or "watch-undeclared" in faults):
+            return self.listen(params, identifier)
         if "unknown-method-200" in faults and not legacy:
             return failure(200, identifier, -32601, "Method not found")
         return failure(200 if legacy else 404, identifier, -32601, "Method not found")
@@ -533,26 +691,18 @@ class FakeProvider:
         """The JSON document a resource holds, or None when there is none."""
         faults = self.faults
         if uri == CURRENT_URI:
-            if self.delay:
-                time.sleep(self.delay)
-            answer = {
-                "protocol": "0.1" if "wrong-protocol" in faults else PROTOCOL,
-                "instance": self.instance + "-other" if "instance-mismatch" in faults else self.instance,
-                "root": self.root,
-            }
-            if not self.no_display:
-                answer["display"] = dict(DISPLAY)
-            if "display-not-object" in faults:
-                answer["display"] = DISPLAY["title"]
-            if "display-title-number" in faults:
-                answer["display"]["title"] = 3
-            if "display-two-lines" in faults:
-                answer["display"]["detail"] = "paragraph 2\nof 9"
-            if "display-long" in faults:
-                answer["display"]["title"] = "x" * 200
-            if "extra-field" in faults:
-                answer["app"] = {"id": self.app["id"], "name": self.app["name"]}
-            return compact(answer)
+            with self._counting:
+                self._reading += 1
+                self.most_reads_outstanding = max(self.most_reads_outstanding, self._reading)
+            try:
+                if self.delay:
+                    time.sleep(self.delay)
+                with self._state:
+                    return compact(self._current())
+            finally:
+                with self._counting:
+                    self._reading -= 1
+                    self.reads_served += 1
         if not self.locate or not uri.startswith(LOCATION_PREFIX):
             return None
         identifier = uri[len(LOCATION_PREFIX):]
@@ -570,6 +720,235 @@ class FakeProvider:
             location.pop("rects", None)
         return compact(location)
 
+    def _display(self):
+        display = dict(DISPLAY)
+        if self.changes % 2:
+            display["detail"] = CHANGED_DETAIL
+        return display
+
+    def _current(self):
+        """The answer to current as it stands. Called with the state held."""
+        faults = self.faults
+        answer = {
+            "protocol": "0.1" if "wrong-protocol" in faults else PROTOCOL,
+            "instance": self.instance + "-other" if "instance-mismatch" in faults else self.instance,
+            "root": self.root,
+        }
+        if not self.no_display:
+            answer["display"] = self._display()
+        if "display-not-object" in faults:
+            answer["display"] = DISPLAY["title"]
+        if "display-title-number" in faults:
+            answer["display"]["title"] = 3
+        if "display-two-lines" in faults:
+            answer["display"]["detail"] = "paragraph 2\nof 9"
+        if "display-long" in faults:
+            answer["display"]["title"] = "x" * 200
+        if "extra-field" in faults:
+            answer["app"] = {"id": self.app["id"], "name": self.app["name"]}
+        return answer
+
+    # -- the app changes
+
+    def change(self):
+        """A real change, as the user selecting something else, then a notice.
+
+        The selection moves between the selected text and the comment, the
+        document's word count goes up by one, so that no two answers are
+        alike, and `display.detail` follows the selection.
+        """
+        with self._state:
+            self.changes += 1
+            moved = self.changes % 2 == 1
+            if self.custom_tree:
+                self._toggle(self._first_child(), "selected")
+            else:
+                text, comment = find(self.root, "sel-1"), find(self.root, "c-1")
+                (comment if moved else text)["selected"] = True
+                (text if moved else comment).pop("selected", None)
+                find(self.root, "doc-1")["attributes"]["words"] = TREE_WORDS + self.changes
+        if "watch-no-notice" not in self.faults:
+            self._notify()
+
+    def hover(self):
+        """The pointer moves to another element: a change in hovered alone.
+
+        It is no change for a watch (section 4.4), so no notice is sent.
+        """
+        with self._state:
+            if self.custom_tree:
+                self._toggle(self._first_child(), "hovered")
+            else:
+                link, comment = find(self.root, "link-1"), find(self.root, "c-1")
+                if link.pop("hovered", None):
+                    comment["hovered"] = True
+                else:
+                    comment.pop("hovered", None)
+                    link["hovered"] = True
+        if "watch-hover-notice" in self.faults:
+            self._notify()
+
+    def burst(self, count=10):
+        """`count` real changes at once, as fast typing. Coalesced on a watch."""
+        for _ in range(count):
+            self.change()
+
+    def _first_child(self):
+        children = self.root.get("children") if isinstance(self.root, dict) else None
+        return children[0] if children and isinstance(children[0], dict) else self.root
+
+    @staticmethod
+    def _toggle(element, state):
+        if element.pop(state, None) is None:
+            element[state] = True
+
+    # -- watching
+
+    def listen(self, params, identifier):
+        """Opens a watch on current, or refuses a filter that does not name it."""
+        faults = self.faults
+        asked = params.get("notifications") if isinstance(params.get("notifications"), dict) else {}
+        addresses = asked.get("resourceSubscriptions")
+        named = isinstance(addresses, list) and CURRENT_URI in addresses
+        if not named and "watch-any-filter" not in faults:
+            return failure(400, identifier, -32602, "Only %s can be watched" % CURRENT_URI)
+        agreed = {"resourceSubscriptions": [CURRENT_URI]}
+        if "watch-ack-extra" in faults:
+            agreed["resourceSubscriptions"].append(LOCATION_PREFIX + "sel-1")
+        if "watch-ack-echo" in faults:
+            agreed = asked
+        held = Held(identifier, agreed)
+        with self._counting:
+            self._watches.append(held)
+            self.watches_opened += 1
+            self.most_watches_open = max(self.most_watches_open, len(self._watches))
+        return Stream(held)
+
+    def release(self, held):
+        with held.lock:
+            if held.timer is not None:
+                held.timer.cancel()
+                held.timer = None
+        with self._counting:
+            if held in self._watches:
+                self._watches.remove(held)
+                self._longest_ended = max(self._longest_ended, time.monotonic() - held.opened)
+        held.close()
+        held.done.set()
+
+    def hold(self, held, connection, wfile):
+        """Writes one watch's events until it ends. Runs on the request's thread."""
+        meta = {META_SUBSCRIPTION: held.subscription}
+        try:
+            if "watch-no-ack" in self.faults:
+                wfile.write(self._notice(held))
+            else:
+                wfile.write(event({"jsonrpc": "2.0", "method": ACKNOWLEDGED,
+                                   "params": {"_meta": meta, "notifications": held.agreed}}))
+            written = time.monotonic()
+            while True:
+                now = time.monotonic()
+                if self.drop_watch_after is not None and now - held.opened >= self.drop_watch_after:
+                    # Abruptly: no completion result, and a reset where the system gives one.
+                    connection.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+                    connection.close()
+                    return
+                if self.keepalive is not None and now - written >= self.keepalive:
+                    wfile.write(b": keep-alive\n\n")
+                    written = now
+                waits = [1.0]
+                if self.keepalive is not None:
+                    waits.append(written + self.keepalive - now)
+                if self.drop_watch_after is not None:
+                    waits.append(held.opened + self.drop_watch_after - now)
+                readable = select.select([connection, held.woken], [], [], max(min(waits), 0.0))[0]
+                if connection in readable and not connection.recv(4096):
+                    return  # The host closed the stream.
+                if held.woken in readable:
+                    held.woken.recv(4096)
+                while True:
+                    try:
+                        item = held.outbox.get_nowait()
+                    except queue.Empty:
+                        break
+                    if item is Held.END:
+                        wfile.write(event({"jsonrpc": "2.0", "id": held.subscription,
+                                           "result": {"resultType": "complete", "_meta": meta}}))
+                        return
+                    wfile.write(item)
+                    written = time.monotonic()
+        except (OSError, ValueError):
+            pass  # The host went away.
+        finally:
+            self.release(held)
+
+    def _notice(self, held):
+        params = {"_meta": {META_SUBSCRIPTION: held.subscription}, "uri": CURRENT_URI}
+        if "watch-wrong-uri" in self.faults:
+            params["uri"] = LOCATION_PREFIX + "sel-1"
+        if "watch-notice-content" in self.faults:
+            params["display"] = self._display()
+        return event({"jsonrpc": "2.0", "method": UPDATED, "params": params})
+
+    def _notify(self):
+        """Tells every watch that current changed: at most one notice in any
+        250 ms on a watch, and the last change always gets one."""
+        with self._counting:
+            watches = list(self._watches)
+        for held in watches:
+            with held.lock:
+                wait = held.last_notice + COALESCE - time.monotonic()
+                if "watch-flood" in self.faults or (wait <= 0 and held.timer is None):
+                    self._send_notice(held)
+                elif held.timer is None and "watch-drops-last" not in self.faults:
+                    held.timer = threading.Timer(wait, self._send_delayed, [held])
+                    held.timer.daemon = True
+                    held.timer.start()
+
+    def _send_delayed(self, held):
+        with held.lock:
+            if held.timer is not None:
+                held.timer = None
+                self._send_notice(held)
+
+    def _send_notice(self, held):
+        """Called with the watch's lock held."""
+        held.last_notice = time.monotonic()
+        held.put(self._notice(held))
+        with self._counting:
+            self.notices_sent += 1
+
+    # -- what a host did
+
+    @property
+    def watches_open(self):
+        with self._counting:
+            return len(self._watches)
+
+    @property
+    def longest_watch(self):
+        """Seconds the longest watch has lasted, the open ones included."""
+        now = time.monotonic()
+        with self._counting:
+            return max([self._longest_ended] + [now - held.opened for held in self._watches])
+
+    def counters(self):
+        return {
+            "watches_open": self.watches_open, "watches_opened": self.watches_opened,
+            "most_watches_open": self.most_watches_open, "longest_watch": round(self.longest_watch, 3),
+            "reads_served": self.reads_served, "most_reads_outstanding": self.most_reads_outstanding,
+            "notices_sent": self.notices_sent, "changes": self.changes,
+        }
+
+    def summary(self):
+        """The counters as the command line prints them. Counts only."""
+        found = self.counters()
+        return "\n".join([
+            "watches: %(watches_opened)d opened, %(most_watches_open)d at most at once, %(watches_open)d still open, the longest %(longest_watch).1f s" % found,
+            "reads of current: %(reads_served)d served, %(most_reads_outstanding)d at most outstanding at once" % found,
+            "notices: %(notices_sent)d sent for %(changes)d changes" % found,
+        ])
+
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="A fake Ambient Context Protocol %s provider." % PROTOCOL)
@@ -584,12 +963,18 @@ def main(argv=None):
     parser.add_argument("--path", default="/mcp", help="the endpoint's path (default /mcp)")
     parser.add_argument("--port", type=int, default=0, help="the port to listen on (default: one the system assigns)")
     parser.add_argument("--tree", metavar="FILE", help="serve the root element in this JSON file instead of the built-in tree")
+    parser.add_argument("--no-watch", action="store_true", help="offer no watch: declare no subscribe and answer subscriptions/listen 404")
+    parser.add_argument("--change-every", type=float, metavar="SECONDS", help="change what is selected this often, and notify every watch")
+    parser.add_argument("--keep-alive", type=float, default=KEEPALIVE, metavar="SECONDS",
+                        help="send a comment line on a watch after this long with nothing to say (default %g)" % KEEPALIVE)
+    parser.add_argument("--drop-watch-after", type=float, metavar="SECONDS",
+                        help="close every watch abruptly this long after it opens, with no completion result")
     arguments = parser.parse_args(argv)
 
     if arguments.list_faults:
         width = max(len(name) for name in FAULTS)
         for name, (what, requirement, checks, outcome) in FAULTS.items():
-            print("%-*s  %s  %s  %s  (%s)" % (width, name, requirement, outcome, what, ", ".join(checks)))
+            print("%-*s  %s  %-5s  %s  (%s)" % (width, name, requirement, outcome, what, ", ".join(checks)))
         return 0
     if not arguments.directory:
         parser.error("--directory is required")
@@ -602,7 +987,8 @@ def main(argv=None):
         provider = FakeProvider(
             arguments.directory, faults=arguments.fault, delay=arguments.delay, locate=not arguments.no_locate, display=not arguments.no_display,
             redirect=arguments.redirect, keep_descriptor=arguments.keep_descriptor, path=arguments.path,
-            port=arguments.port, tree=tree,
+            port=arguments.port, tree=tree, watch=not arguments.no_watch, change_every=arguments.change_every,
+            keepalive=arguments.keep_alive, drop_watch_after=arguments.drop_watch_after,
         )
     except ValueError as error:
         parser.error(str(error))
@@ -616,7 +1002,9 @@ def main(argv=None):
         print("answering on %s; Ctrl-C to stop" % provider.endpoint, flush=True)
         stopping.wait()
     finally:
+        found = provider.summary()  # Before the stop ends the watches still open.
         provider.stop()
+        print(found, flush=True)
     return 0
 
 

@@ -2,7 +2,7 @@
 
 Makes a desktop app built on Node, such as an Electron app, a provider of the Ambient Context Protocol, version 0.2.2: it runs the local server, answers the protocol's requests and keeps the descriptor file a host finds the app by. The app writes one thing, a tree of what the user has open and selected.
 
-Version 0.2.2 is defined by four accepted proposals until the specification is rewritten to match: [the element model](../../docs/rfcs/0001-element-model.md), [the shared listener](../../docs/rfcs/0002-shared-listener.md) [the hovered state](../../docs/rfcs/0003-hovered-state.md) and [display and the favicon](../../docs/rfcs/0005-display-and-favicon.md). Discovery, transport and trust are unchanged from [the 0.1 specification](../../docs/protocol-v0.md), sections 7 and 8.
+Version 0.2.2 is defined by five accepted proposals until the specification is rewritten to match: [the element model](../../docs/rfcs/0001-element-model.md), [the shared listener](../../docs/rfcs/0002-shared-listener.md), [the hovered state](../../docs/rfcs/0003-hovered-state.md), [display and the favicon](../../docs/rfcs/0005-display-and-favicon.md) and [watching](../../docs/rfcs/0006-watching.md). Discovery, transport and trust are unchanged from [the 0.1 specification](../../docs/protocol-v0.md), sections 7 and 8.
 
 It uses Node's standard library only and has no dependencies. It is plain TypeScript with no build step: Node 22.18 or later runs the source directly, and a bundler takes it as it is. Like the protocol's discovery, it is for macOS. It began as a port of the [Swift package](../swift/README.md), name for name; that package is still at 0.1, so the two differ until it is carried over.
 
@@ -165,6 +165,38 @@ const notesContext: ContextProvider = {
 `title` is what is open and `detail` is what is selected or in focus within it. Both are plain text; the package puts each on one line and cuts it at 80 characters, and sends nothing when there is no `title`. `display()` is called straight after `current()` and must describe the same tree: it names nothing the tree does not hold. Return nothing to let the host word the line.
 
 The picture is not sent. Ship it as a file in the app, `Contents/Resources/favicon.svg` in the bundle on macOS, or `favicon.png` (at least 32 by 32 pixels) when there is no SVG. The host finds it there itself. Draw a simple shape in one light color: it is shown at about 16 points, often on a dark surface. In an Electron app, add the file to the packager's extra resources so that it lands directly in `Contents/Resources`.
+
+## Say when it changes (optional)
+
+A host reads the context once, when the user asks for it, and shows the user what it read. A watch is one request the host then holds open while that line is on screen, on which the provider says "changed", with no content, so the host can read again and the line stays true.
+
+The package holds the watch. The app adds one call, wherever what `current()` would answer may have changed:
+
+```ts
+server.contextDidChange();
+```
+
+In an Electron app the tree is usually built from state the renderer owns, so the call comes from the renderer's own events, relayed to the main process where the server runs: the selection changed, the focus moved, the user navigated, a document, tab or window opened or closed.
+
+```ts
+// Renderer, through the preload script's bridge:
+document.addEventListener("selectionchange", () => bridge.contextChanged());
+
+// Main process:
+ipcMain.on("context-changed", () => server.contextDidChange());
+win.on("focus", () => server.contextDidChange());
+win.webContents.on("did-navigate-in-page", () => server.contextDidChange());
+```
+
+Update the state `current()` answers from before making the call, or in the same turn. If `display()` words the line from something the tree does not show, make the call when that changes too.
+
+Calling often is fine. With no host watching, the call does nothing. With one, the package waits out a burst (at most one notice in 250 milliseconds, and the last change always gets one), then asks for `current()` and `display()` and sends the notice only if that answer differs from the one the host last read or was last told of. A call with nothing changed sends nothing.
+
+The pointer needs no call. A change in `hovered` alone is not a change a host is told of, and a call made for one sends nothing; the next read carries the hovered element as always.
+
+A place the app forgets is a line that goes stale with no error anywhere, so do not make up for one by calling on a timer: that is polling moved into the app. The package holds at most eight watches and ends them all at `stop()`.
+
+Only `ContextServer` offers this. A `ContextResponder` on the app's own server does not offer it yet: it answers a watch request as a method it does not have, and a host falls back to reading when the user asks.
 
 ## Say where it is (optional)
 

@@ -22,6 +22,10 @@ import type { ContextIssue } from "./tree.ts";
 // the loopback interface mounts a `ContextResponder` at a path of its
 // choosing and writes the descriptor with `ContextDescriptor` (RFC-0002).
 // `ContextHTTP` is open to the package's tests.
+//
+// `ContextServer` also offers `watch` (RFC-0006): a host holds one request
+// open and is told, with no content, when the answer to `current` changes.
+// A responder mounted on an app's own server does not offer it yet.
 
 // MARK: - HTTP
 
@@ -221,7 +225,7 @@ function encodeDisplay(display: ContextDisplay | null | undefined): unknown {
   return { title, detail: displayLine(display?.detail) };
 }
 
-function encodeElement(element: ContextElement): unknown {
+function encodeElement(element: ContextElement, hovered = true): unknown {
   return {
     id: element.id,
     role: element.role,
@@ -231,9 +235,9 @@ function encodeElement(element: ContextElement): unknown {
     url: element.url ?? undefined,
     selected: element.selected === true ? true : undefined,
     focused: element.focused === true ? true : undefined,
-    hovered: element.hovered === true ? true : undefined,
+    hovered: hovered && element.hovered === true ? true : undefined,
     visible: typeof element.visible === "boolean" ? element.visible : undefined,
-    children: element.children && element.children.length > 0 ? element.children.map(encodeElement) : undefined,
+    children: element.children && element.children.length > 0 ? element.children.map((child) => encodeElement(child, hovered)) : undefined,
     attributes: element.attributes ?? undefined,
   };
 }
@@ -253,7 +257,28 @@ function encodeLocation(location: ContextLocation): unknown {
   };
 }
 
+/** The JSON document `ambient://current` holds. */
+function encodeCurrent(instance: string, root: ContextElement, display: ContextDisplay | null | undefined, hovered = true): string {
+  return sortedJSON({
+    protocol: ContextResponder.protocolVersion,
+    instance,
+    display: encodeDisplay(display),
+    root: encodeElement(root, hovered),
+  });
+}
+
+/**
+ * What two answers to `current` are compared by, to tell whether a watch
+ * is owed a notice: a digest of the answer with every `hovered` left out,
+ * since a change in `hovered` alone is not a change (RFC-0006). A digest,
+ * so that nothing from the app is kept between requests.
+ */
+function comparableCurrent(instance: string, root: ContextElement, display: ContextDisplay | null | undefined): string {
+  return createHash("sha256").update(encodeCurrent(instance, root, display, false), "utf8").digest("base64");
+}
+
 const metaVersion = "io.modelcontextprotocol/protocolVersion";
+const metaSubscription = "io.modelcontextprotocol/subscriptionId";
 const metaCapabilities = "io.modelcontextprotocol/clientCapabilities";
 const metaServerInfo = "io.modelcontextprotocol/serverInfo";
 
@@ -400,6 +425,7 @@ export class ContextResponder {
     const versions = ContextResponder.legacyVersions;
     const extension = { [ContextResponder.extensionID]: { version: ContextResponder.protocolVersion } };
     const serverInfo = { name: this.app.name, version: this.app.version };
+    const watches = watchesOf.get(this);
 
     if (method === "initialize") {
       const asked = params["protocolVersion"];
@@ -414,7 +440,8 @@ export class ContextResponder {
     if (method === "server/discover" && !legacy) {
       return success(id, false, {
         supportedVersions: [ContextResponder.mcpVersion, ...versions],
-        capabilities: { resources: {}, extensions: extension },
+        // Only a responder that can hold a watch open says so.
+        capabilities: { resources: watches ? { subscribe: true } : {}, extensions: extension },
         _meta: { [metaServerInfo]: serverInfo },
       });
     }
@@ -449,6 +476,28 @@ export class ContextResponder {
       }
       return success(id, legacy, { contents: [{ uri, mimeType: "application/json", text }] });
     }
+    if (method === "subscriptions/listen" && !legacy && watches) {
+      // Whatever else the filter asks for, only `current` is served, and
+      // only when it was asked for.
+      const filter = isObject(params["notifications"]) ? params["notifications"] : {};
+      const asked = filter["resourceSubscriptions"];
+      if (!Array.isArray(asked) || !asked.includes(ContextResponder.currentURI)) {
+        return failure(400, id, -32602, `Only ${ContextResponder.currentURI} can be watched`);
+      }
+      const acknowledgment = sseMessage({
+        jsonrpc: "2.0",
+        method: "notifications/subscriptions/acknowledged",
+        params: {
+          _meta: { [metaSubscription]: id },
+          notifications: { resourceSubscriptions: [ContextResponder.currentURI] },
+        },
+      });
+      const opening = response(200, {
+        "Content-Type": "text/event-stream", "Cache-Control": "no-store", "X-Accel-Buffering": "no",
+      }, acknowledgment);
+      streamIDs.set(opening, id);
+      return opening;
+    }
     return failure(legacy ? 200 : 404, id, -32601, "Method not found");
   }
 
@@ -461,12 +510,10 @@ export class ContextResponder {
       const root = await this.current();
       const display = this.display ? await this.display() : undefined;
       this.#inspect(root);
-      return sortedJSON({
-        protocol: ContextResponder.protocolVersion,
-        instance: this.instance,
-        display: encodeDisplay(display),
-        root: encodeElement(root),
-      });
+      const text = encodeCurrent(this.instance, root, display);
+      // A watch is owed a notice only when the answer differs from this one.
+      watchesOf.get(this)?.remember(comparableCurrent(this.instance, root, display));
+      return text;
     }
     if (!this.locate || !uri.startsWith(ContextResponder.locationPrefix)) return undefined;
     let id: string;
@@ -593,6 +640,203 @@ function sameBytes(a: string, b: string): boolean {
   return timingSafeEqual(left, right);
 }
 
+// MARK: - Watching (RFC-0006)
+
+/** One JSON-RPC message as a server-sent event. */
+function sseMessage(message: JSONObject): Buffer {
+  return Buffer.from(`event: message\ndata: ${sortedJSON(message)}\n\n`, "utf8");
+}
+
+const sseKeepAlive = Buffer.from(": keep-alive\n\n", "utf8");
+
+/**
+ * The head of a response that stays open: no `Content-Length`, so the
+ * body runs until the connection closes.
+ */
+function streamHead(opening: ContextHTTPResponse): Buffer {
+  const all: Record<string, string> = { ...opening.headers, Connection: "close" };
+  let head = `HTTP/1.1 ${opening.status} ${reason(opening.status)}\r\n`;
+  for (const name of Object.keys(all).sort()) head += `${name}: ${all[name] ?? ""}\r\n`;
+  return Buffer.from(head + "\r\n", "utf8");
+}
+
+/**
+ * The responders that offer `watch`, which are those `ContextServer`
+ * makes. Kept here and not in `ContextResponderOptions`, so an app that
+ * mounts a responder on its own server cannot turn on what its server
+ * would then have to stream.
+ */
+const watchesOf = new WeakMap<ContextResponder, ContextWatches>();
+
+/**
+ * The responses that open a watch, with the id of the request each
+ * answers: its body is the acknowledgment and the connection stays open.
+ */
+const streamIDs = new WeakMap<ContextHTTPResponse, RequestID>();
+
+interface ContextWatch {
+  socket: Socket;
+  id: RequestID;
+  quiet: NodeJS.Timeout | undefined;
+}
+
+/**
+ * The watches one running `ContextServer` holds, and the rule for when
+ * they are told of a change: at most one notice in any `interval` on one
+ * watch, the last change always followed by one, and none when the answer
+ * to `current`, `hovered` aside, is what a host was last given or told of.
+ */
+class ContextWatches {
+  /** The most watches held at once. One more ends the oldest. */
+  static readonly limit = 8;
+  /** A watch whose reader has fallen this many bytes behind is dropped. */
+  static readonly backlogLimit = 64 * 1024;
+
+  #comparable: () => Promise<string>;
+  #interval: number;
+  #keepAlive: number;
+  #open: ContextWatch[] = [];
+  #remembered: string | undefined;
+  #stopped = false;
+  #changed = false;
+  #computing = false;
+  #timer: NodeJS.Timeout | undefined;
+  /** When the answer was last computed for a notice. */
+  #last = Number.NEGATIVE_INFINITY;
+
+  constructor(comparable: () => Promise<string>, interval: number, keepAlive: number) {
+    this.#comparable = comparable;
+    this.#interval = interval;
+    this.#keepAlive = keepAlive;
+  }
+
+  get count(): number { return this.#open.length; }
+
+  /** A read answered with this; no notice is owed for it. */
+  remember(comparable: string): void {
+    this.#remembered = comparable;
+  }
+
+  /** Sends the response that opens a watch and keeps its connection. */
+  open(socket: Socket, id: RequestID, opening: ContextHTTPResponse): void {
+    const watch: ContextWatch = { socket, id, quiet: undefined };
+    socket.setNoDelay(true);
+    socket.write(streamHead(opening));
+    socket.write(opening.body);
+    // Stopped while the request was being answered, or the host has
+    // already closed its side: the watch is over as it opens.
+    if (this.#stopped || socket.readableEnded) {
+      this.#complete(watch);
+      return;
+    }
+    while (this.#open.length >= ContextWatches.limit) {
+      const oldest = this.#open[0];
+      if (oldest) this.#end(oldest);
+    }
+    this.#open.push(watch);
+    // A host ends a watch by closing the connection.
+    socket.on("end", () => {
+      this.#remove(watch);
+      socket.destroy();
+    });
+    socket.on("close", () => this.#remove(watch));
+    this.#rest(watch);
+    // The host read before it asked to watch. If the answer moved in
+    // between, it is told now (specification 4.4).
+    if (this.#remembered !== undefined) {
+      this.#changed = true;
+      this.#schedule();
+    }
+  }
+
+  /** The app says its answer may have changed. */
+  changed(): void {
+    if (this.#stopped || this.#open.length === 0) return;
+    this.#changed = true;
+    this.#schedule();
+  }
+
+  /** Ends every watch, and any opened afterwards. */
+  stop(): void {
+    this.#stopped = true;
+    for (const watch of [...this.#open]) this.#end(watch);
+  }
+
+  #schedule(): void {
+    if (!this.#changed || this.#computing || this.#timer !== undefined) return;
+    const wait = Math.max(0, this.#last + this.#interval - performance.now());
+    this.#timer = setTimeout(() => this.#fire(), wait);
+  }
+
+  #fire(): void {
+    this.#timer = undefined;
+    this.#changed = false;
+    if (this.#open.length === 0) return;
+    this.#computing = true;
+    // An answer the app could not give is no change to tell of.
+    this.#comparable().catch(() => undefined).then((now) => {
+      this.#computing = false;
+      this.#last = performance.now();
+      if (now !== undefined && now !== this.#remembered) {
+        this.#remembered = now;
+        for (const watch of [...this.#open]) {
+          this.#write(watch, sseMessage({
+            jsonrpc: "2.0",
+            method: "notifications/resources/updated",
+            params: { _meta: { [metaSubscription]: watch.id }, uri: ContextResponder.currentURI },
+          }));
+        }
+      }
+      // A change that came while this one was being computed.
+      this.#schedule();
+    });
+  }
+
+  #write(watch: ContextWatch, bytes: Buffer): void {
+    if (watch.socket.destroyed) return;
+    watch.socket.write(bytes);
+    if (watch.socket.writableLength > ContextWatches.backlogLimit) {
+      watch.socket.destroy();
+      return;
+    }
+    this.#rest(watch);
+  }
+
+  /** Starts the wait after which a watch with nothing to say says so. */
+  #rest(watch: ContextWatch): void {
+    clearTimeout(watch.quiet);
+    watch.quiet = setTimeout(() => this.#write(watch, sseKeepAlive), this.#keepAlive);
+    watch.quiet.unref();
+  }
+
+  #remove(watch: ContextWatch): void {
+    clearTimeout(watch.quiet);
+    watch.quiet = undefined;
+    const at = this.#open.indexOf(watch);
+    if (at >= 0) this.#open.splice(at, 1);
+    if (this.#open.length === 0) {
+      clearTimeout(this.#timer);
+      this.#timer = undefined;
+      this.#changed = false;
+    }
+  }
+
+  /** Ends a watch as the provider: the request's result, then the close. */
+  #end(watch: ContextWatch): void {
+    this.#remove(watch);
+    this.#complete(watch);
+  }
+
+  #complete(watch: ContextWatch): void {
+    if (watch.socket.destroyed) return;
+    watch.socket.end(sseMessage({
+      jsonrpc: "2.0",
+      id: watch.id,
+      result: { resultType: "complete", _meta: { [metaSubscription]: watch.id } },
+    }), () => watch.socket.destroy());
+  }
+}
+
 // MARK: - Descriptor
 
 /** The file a running provider keeps so a host can find it. */
@@ -696,11 +940,23 @@ export interface ContextServerOptions {
   check?: "warn" | "refuse" | "off";
   /** As `ContextResponderOptions.report`. */
   report?: (issue: ContextIssue) => void;
+  /**
+   * For the package's tests: the least time between two notices on one
+   * watch, in milliseconds. 250, which is the protocol's rule.
+   */
+  _coalesceInterval?: number;
+  /**
+   * For the package's tests: how long a watch is quiet before a
+   * keep-alive comment is sent, in milliseconds. 10 000; the protocol
+   * asks for one at least every 15 seconds.
+   */
+  _keepAliveInterval?: number;
 }
 
 /**
  * The listener and the descriptor. Start it and a host can find and read
- * the provider; stop it and both are gone.
+ * the provider; stop it and both are gone. While it runs, a host may also
+ * watch it: call `contextDidChange()` when the answer may have changed.
  */
 export class ContextServer {
   #provider: ContextProvider;
@@ -708,6 +964,9 @@ export class ContextServer {
   #directory: string;
   #check: ContextServerOptions["check"];
   #report: ContextServerOptions["report"];
+  #coalesceInterval: number;
+  #keepAliveInterval: number;
+  #watches: ContextWatches | undefined;
   #listener: Server | undefined;
   #ready: Promise<void> | undefined;
   #descriptorPath: string | undefined;
@@ -722,6 +981,8 @@ export class ContextServer {
     this.#directory = options.directory ?? ContextDescriptor.defaultDirectory;
     this.#check = options.check;
     this.#report = options.report;
+    this.#coalesceInterval = options._coalesceInterval ?? 250;
+    this.#keepAliveInterval = options._keepAliveInterval ?? 10_000;
   }
 
   /** The endpoint, once the listener is up. */
@@ -729,6 +990,20 @@ export class ContextServer {
   get token(): string | undefined { return this.#token; }
   get instance(): string | undefined { return this.#instance; }
   get isRunning(): boolean { return this.#listener !== undefined; }
+  /** For the package's tests: how many watches are open now. */
+  get _watchCount(): number { return this.#watches?.count ?? 0; }
+
+  /**
+   * Says that what `current()` would answer may have changed: a
+   * selection, the focus, a document opened or closed. Call it from the
+   * app's own events, as often as they come. With no host watching it
+   * does nothing. With one, the server waits out a burst, asks the
+   * provider for its answer and tells the host only if that answer,
+   * `hovered` aside, is not the one the host last had.
+   */
+  contextDidChange(): void {
+    this.#watches?.changed();
+  }
 
   /**
    * Opens the listener on the loopback interface, on a port the system
@@ -756,7 +1031,16 @@ export class ContextServer {
       ...(this.#report ? { report: this.#report } : {}),
     });
 
-    const listener = createServer({ allowHalfOpen: true }, (socket) => serve(socket, responder));
+    // What a notice is decided by: the answer as a read would compute it.
+    const watches = new ContextWatches(async () => {
+      const root = await responder.current();
+      const display = responder.display ? await responder.display() : undefined;
+      return comparableCurrent(responder.instance, root, display);
+    }, this.#coalesceInterval, this.#keepAliveInterval);
+    watchesOf.set(responder, watches);
+    this.#watches = watches;
+
+    const listener = createServer({ allowHalfOpen: true }, (socket) => serve(socket, responder, watches));
     this.#listener = listener;
     this.#token = token;
     this.#instance = instance;
@@ -802,8 +1086,10 @@ export class ContextServer {
     }
   }
 
-  /** Closes the listener and removes the descriptor. */
+  /** Closes the listener, ends every watch and removes the descriptor. */
   stop(): void {
+    this.#watches?.stop();
+    this.#watches = undefined;
     const listener = this.#listener;
     this.#listener = undefined;
     this.#ready = undefined;
@@ -830,8 +1116,11 @@ export class ContextServer {
   }
 }
 
-/** One accepted connection: reads a request, answers it, closes. */
-function serve(socket: Socket, responder: ContextResponder): void {
+/**
+ * One accepted connection: reads a request, answers it, closes. The one
+ * answer that does not close is the opening of a watch.
+ */
+function serve(socket: Socket, responder: ContextResponder, watches: ContextWatches): void {
   let chunks: Buffer = Buffer.alloc(0);
   let answered = false;
 
@@ -842,6 +1131,13 @@ function serve(socket: Socket, responder: ContextResponder): void {
 
   const send = (answer: ContextHTTPResponse): void => {
     if (socket.destroyed) return;
+    const watch = streamIDs.get(answer);
+    if (watch !== undefined) {
+      // A watch is silent for as long as nothing changes.
+      clearTimeout(timer);
+      watches.open(socket, watch, answer);
+      return;
+    }
     socket.end(ContextHTTP.serialize(answer), () => socket.destroy());
   };
 

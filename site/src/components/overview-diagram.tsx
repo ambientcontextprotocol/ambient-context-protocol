@@ -1,3 +1,4 @@
+import { ProtocolLogo } from '@/components/protocol-logo';
 import { name } from '@/lib/name';
 
 type Box = { title: string; detail: string };
@@ -74,6 +75,7 @@ export function OverviewDiagram() {
         <Column label="Providers: the apps the user works in. They answer what is open and selected, and where." boxes={providers} tone={neutral} />
         <Arrow id="arrow-in" from={gray} to={sky} />
         <div className="rounded-lg border border-sky-400/50 bg-sky-500/15 px-3 py-6 text-center shadow-[0_0_32px_-8px_rgba(56,189,248,0.35)]">
+          <ProtocolLogo className="mx-auto mb-3 h-8 w-8 text-sky-200" />
           <div className="text-sm font-semibold text-sky-100">{name}</div>
           <div className="mb-3 text-xs text-sky-300/80">An extension to MCP</div>
           <div className="flex flex-col gap-1 whitespace-nowrap font-mono text-[11px] text-sky-100/90">

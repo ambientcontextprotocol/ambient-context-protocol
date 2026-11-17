@@ -110,11 +110,11 @@ Whether an element can be located is asked, not declared in advance. An id the p
 
 ## Discovery
 
-A running provider writes a **descriptor file** into a known per-user folder and removes it when it quits. The file gives the protocol version, the app's bundle identifier, name and version, the process id, the instance, the endpoint of the provider's MCP server, and the bearer token for this run.
+A running provider writes a **descriptor file** into a known per-user folder and removes it when it quits. The file gives the protocol version, the app's identifier (on macOS, its bundle identifier), name and version, the process id, the instance, the endpoint of the provider's MCP server, and the bearer token for this run.
 
 The endpoint is `http://127.0.0.1:<port><path>`. The path is the provider's choice: a provider may open its own listener or serve the endpoint from a local server the app already has. A host uses the path as given and does not assume `/mcp`.
 
-To find the front app's provider, a host takes the front app's process id from the operating system and looks for a descriptor with that process id. It ignores a descriptor whose process is no longer running, whose bundle identifier does not match the process, or whose `protocol` it does not support. Before using the endpoint it checks that the address is `127.0.0.1` and that the process listening on the port is the process the descriptor names. It ignores an answer whose `instance` or `protocol` differs from the descriptor's.
+To find the front app's provider, a host takes the front app's process id from the operating system and looks for a descriptor with that process id. It ignores a descriptor whose process is no longer running, whose app identifier does not match the process, or whose `protocol` it does not support. Before using the endpoint it checks that the address is `127.0.0.1` and that the process listening on the port is the process the descriptor names. It ignores an answer whose `instance` or `protocol` differs from the descriptor's.
 
 When the user has turned the provider off in the app, it writes no descriptor and opens no listener.
 

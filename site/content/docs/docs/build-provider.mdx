@@ -102,7 +102,7 @@ To clients that use the `initialize` handshake, declare it under `capabilities.e
 <Step>
 ### Write the descriptor file
 
-After the listener is up, write one file into the providers folder, named `<bundle-id>.<pid>.json`. Write it to a temporary name in the same folder and rename it into place, so a host never reads half a file. Remove it when the app quits, and at launch remove any descriptor left by an earlier run that did not exit cleanly.
+After the listener is up, write one file into the platform's descriptor folder, named `<app-id>.<pid>.json`. On macOS, the only platform with a profile in 0.2.0, the folder is the one below and the app's identifier is its bundle identifier. Write it to a temporary name in the same folder and rename it into place, so a host never reads half a file. Remove it when the app quits, and at launch remove any descriptor left by an earlier run that did not exit cleanly.
 
 ```json title="~/Library/Application Support/AmbientContext/providers/org.example.editor.48211.json"
 {

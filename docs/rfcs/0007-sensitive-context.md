@@ -5,9 +5,9 @@
 | Field | Value |
 |---|---|
 | Author | The Sirius session, for Andrew Jones |
-| Status | Draft |
+| Status | Accepted |
 | Created | `2026.11.18` |
-| Decided | |
+| Decided | `2026.11.18` |
 | Discussion | Issue #1, "Sensitive page content goes out silently with ambient context". Not yet opened as a pull request |
 | Specification sections | 4.1 (the answer to `current`), new 4.4, 9.1 and 9.2 (rules), 10 (the version) |
 | Version effect | Additive: `0.2.3` to `0.2.4` |
@@ -108,4 +108,8 @@ The requirement that the answer holds exactly its listed fields is replaced from
 
 ## 10. Decision and outcome
 
-Pending.
+Accepted on 2026.11.18 by Andrew Jones, maintainer, on the revision of commit `38a51f3`, for protocol version `0.2.4`. His words, as relayed by the sirius-claude session, were "looks good on the sensitive thing".
+
+The open questions in section 9 stay open during implementation. It is built as the draft states: `sensitive` is declared on the answer, and a host may keep its own list.
+
+One correction for the implementation: the specification already has a section 4.4 (watch, from RFC-0006), so the section this RFC calls "new 4.4" is written as 4.5.

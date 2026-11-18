@@ -1,6 +1,6 @@
 # Ambient Context Protocol · Operations
 
-> Part of the [specification](index.md), version `0.2.3`.
+> Part of the [specification](index.md), version `0.2.4`.
 
 ## 4. Operations
 
@@ -16,14 +16,15 @@ Result, an object with these fields and no others:
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `protocol` | string | yes | The version of this protocol the answer follows: `"0.2.3"`. The same value as in the descriptor and the extension declaration ([section 10](versioning.md#10-versioning)). |
+| `protocol` | string | yes | The version of this protocol the answer follows: `"0.2.4"`. The same value as in the descriptor and the extension declaration ([section 10](versioning.md#10-versioning)). |
 | `instance` | string | yes | A random value the provider mints each time it starts. It identifies this run of the provider. See [ids and instances](elements.md#54--ids-and-instances). |
 | `root` | [element](elements.md#5-elements) | yes | The app, as an element with role `Application`. Everything the provider reports is inside it. |
 | `display` | object | no | The app's own words for what this answer holds, for the host to show the user. See [4.3](#43--display). |
+| `sensitive` | boolean | no | Sent as `true` when what this answer holds is likely private, so that a host asks the user before sending it on. Never sent as `false`. See [4.5](#45--sensitive). |
 
 The app's name is the root's `title`. Its identifier is in the descriptor ([section 8](discovery.md#8-discovery)), not in the answer.
 
-The result's shape is also given as a JSON Schema, [`schema/current-0.2.3.json`](../../schema/current-0.2.3.json). The schema checks what a schema can; unique ids, the focus path and the single hovered element are rules of [section 5](elements.md#5-elements) it cannot state.
+The result's shape is also given as a JSON Schema, [`schema/current-0.2.4.json`](../../schema/current-0.2.4.json). The schema checks what a schema can; unique ids, the focus path and the single hovered element are rules of [section 5](elements.md#5-elements) it cannot state.
 
 What the user is pointing at is not a separate field. It is stated on the elements themselves, as the states `selected`, `focused` and `hovered` ([5.3](elements.md#53--states)).
 
@@ -83,3 +84,37 @@ The operation has no result while it lasts. For as long as it is open, the provi
 **The order of things.** A host reads `current` on the user's action, then opens the watch. If the answer changed between that read and the watch opening, the provider says so as soon as the watch is open, so the host never needs to read twice to be sure.
 
 Rules for a provider are in [9.1](security.md#91--for-providers): it gathers changes into at most one notice in any 250 milliseconds, never drops the last one, and learns of changes from the app's own events. Rules for a host are in [9.2](security.md#92--for-hosts): one watch, on the provider it has just read, only while it is showing that provider's context. How MCP carries the operation is in [7.7](binding.md#77--watching).
+
+### 4.5 — sensitive
+
+Some apps mostly show things that are private to the user or to someone else: mail, messages, a browser signed in to a bank. `sensitive` lets the app say so, so that a host asks the user before that context goes to an agent. It is optional, and it is one bit about the whole answer: it marks no element, span or kind of data.
+
+A mail client with a message selected answers:
+
+```json
+{
+  "protocol": "0.2.4",
+  "instance": "k3f9x2",
+  "sensitive": true,
+  "display": { "title": "Re: Lease renewal terms", "detail": "“We can offer twelve…”" },
+  "root": { "id": "app", "role": "Application", "title": "Mail" }
+}
+```
+
+Rules for a provider:
+
+- A provider sends `"sensitive": true` when what the answer holds is likely private to the user or to another person. A provider with no reason to say so leaves the field out. It does not send `false` to claim the content is safe.
+- `sensitive` describes the same moment and the same tree as the answer it is in. A provider may send it on every answer, as a mail client would, or only on some, as a browser might for a page behind a sign-in. The rule for choosing is the provider's.
+- It is sent on the answer. It is not in the descriptor.
+- It does not replace leaving things out. What a provider must never report, it still never reports ([9.1](security.md#91--for-providers)): a host written before this version ignores the field.
+- It is not a request for the host to clean the answer. Removing or masking private details inside what it reports is the provider's job, and no host is required to do it ([9.1](security.md#91--for-providers)).
+- A provider that answers for another app ([section 8](discovery.md#8-discovery)) sends it with the same meaning.
+
+Rules for a host:
+
+- Only the JSON value `true` counts. `false`, a missing field and a value of any other type are all read as absent. None of them is a reason to refuse an answer.
+- A host that holds an answer marked sensitive does not send that context to an agent, or anywhere off the device, until the user has confirmed that send knowing which app it came from, or has earlier told the host not to ask for that app. How the host asks is its own business.
+- A host with no way to ask leaves the context out and tells the user it did.
+- The user's choice not to be asked again is kept per app, and the user can undo it. For a provider that answers for another app, the app the host names to the user, and keeps the choice for, is the app answered for.
+- Absence says nothing. A host never reads a missing `sensitive`, or `"sensitive": false`, as a reason to skip a warning it would otherwise give, and it does not show unmarked context to the user as vetted. A host may still treat any app as sensitive by a list of its own or by its own judgment ([9.2](security.md#92--for-hosts)).
+- `sensitive` is for the host and the user. This version does not ask a host to pass it to the agent.

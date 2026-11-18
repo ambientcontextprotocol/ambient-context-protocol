@@ -1,10 +1,10 @@
 # Ambient Context Protocol · Discovery
 
-> Part of the [specification](index.md), version `0.2.3`.
+> Part of the [specification](index.md), version `0.2.4`.
 
 ## 8. Discovery
 
-A host has to find the provider for the app in front. Version 0.2.3 defines one way, for apps that can write a file in a folder the user's other apps can read.
+A host has to find the provider for the app in front. Version 0.2.4 defines one way, for apps that can write a file in a folder the user's other apps can read.
 
 A running provider writes one descriptor file and removes it at quit.
 
@@ -13,7 +13,7 @@ A running provider writes one descriptor file and removes it at quit.
 
 ```json
 {
-  "protocol": "0.2.3",
+  "protocol": "0.2.4",
   "app": { "id": "org.example.editor", "name": "Editor", "version": "2.3.0" },
   "pid": 48211,
   "instance": "k3f9x2",
@@ -40,7 +40,7 @@ A provider writes the file after its listener is up, and writes it atomically: t
 
 ```json
 {
-  "protocol": "0.2.3",
+  "protocol": "0.2.4",
   "app": { "id": "io.github.ambientcontextprotocol.chrome", "name": "Ambient Context for Chrome", "version": "0.1.0" },
   "pid": 20311,
   "for": { "id": "com.google.Chrome", "pid": 1054 },
@@ -65,7 +65,7 @@ The file above is `com.google.Chrome.1054.for.20311.json`. The helper removes th
    More than one provider may answer for the front app, as when a browser runs one helper for each of its profiles. A host may bound how many it reads. It reads each within its one time limit and uses the answer whose tree has a focus path. If none has, it uses the first to answer.
 5. To place something beside an element, read `ambient://location/<id>` from the same provider and instance that issued the id.
 
-**What this defends against, and what it does not.** Keeping the folder and the file to the user keeps other users of the machine out. The token keeps out a program that can reach the port but cannot read the file. The check in step 3 keeps a descriptor from pointing a host at a server run by some other process. None of this defends against a hostile program already running as the user: it can read the token, and it can read the user's documents without this protocol. Version 0.2.3 states that limit and does not try to remove it. The token is also not consent: it shows that a caller can read the user's files, not that the user approved that caller.
+**What this defends against, and what it does not.** Keeping the folder and the file to the user keeps other users of the machine out. The token keeps out a program that can reach the port but cannot read the file. The check in step 3 keeps a descriptor from pointing a host at a server run by some other process. None of this defends against a hostile program already running as the user: it can read the token, and it can read the user's documents without this protocol. Version 0.2.4 states that limit and does not try to remove it. The token is also not consent: it shows that a caller can read the user's files, not that the user approved that caller.
 
 For a provider that answers for another app, the parent check in step 2 shows that the operating system recorded the front app as the process that started it, and a program cannot arrange that by writing a file. It does not show that the app's maker wrote or approved the provider: for a browser, any extension the user has installed can have a helper, and a program already running as the user can register one. This trusts what the user has installed in the app, which is weaker than the rule for an app's own provider; the `via` attribute ([9.1](security.md#91--for-providers)) lets a host say so to an agent.
 
@@ -75,7 +75,7 @@ On a listener the app shares with other routes ([7.1](binding.md#71--the-server)
 
 ### 8.1 · Platform profiles
 
-Sections 8 and 8.2 leave six things to the platform. A profile fixes them. Version 0.2.3 defines one profile, for macOS. A provider or host on a platform that has no profile cannot yet conform to section 8: it must not choose a folder of its own, because two hosts that guess differently would not find each other's providers. A profile for another platform is added by an RFC.
+Sections 8 and 8.2 leave six things to the platform. A profile fixes them. Version 0.2.4 defines one profile, for macOS. A provider or host on a platform that has no profile cannot yet conform to section 8: it must not choose a folder of its own, because two hosts that guess differently would not find each other's providers. A profile for another platform is added by an RFC.
 
 | A profile fixes | macOS |
 |---|---|

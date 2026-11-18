@@ -1,31 +1,32 @@
 # Ambient Context Protocol · Versioning
 
-> Part of the [specification](index.md), version `0.2.3`.
+> Part of the [specification](index.md), version `0.2.4`.
 
 ## 10. Versioning
 
-The protocol has a version of three parts, `major.minor.patch`, sent as a string. This draft is `0.2.3`.
+The protocol has a version of three parts, `major.minor.patch`, sent as a string. This draft is `0.2.4`.
 
 - **Where it appears.** In the descriptor's `protocol` field, in the extension's settings object in the provider's capabilities, and in the `protocol` field of the `current` result. A provider gives the same value in all three.
 - **While the major version is 0,** a new minor version may change or remove anything, and a new patch version only adds: new optional fields, new roles, new values a receiver may ignore. A host and a provider work together only if they agree on the major and minor parts. A host may support more than one version at a time, choosing by the descriptor's `protocol` field. A host that does not support a provider's version treats the app as if it were not a provider.
 - **From 1.0,** a minor version only adds: new optional fields, new resources, new values a receiver may ignore. Anything that would break an existing implementation takes a new major version.
 - **Unknown fields are ignored.** A receiver must not fail on a field, a `subrole` or an `attributes` name it does not recognize. A `role` it does not recognize is read as `Group`.
-- **MCP's version is separate.** Each request names the MCP revision it uses, and MCP's own rules settle that. This protocol's version says nothing about it, except that content blocks follow the MCP schema this version names (`2026-07-28` for `0.2.3`). A host skips block types it cannot handle.
+- **MCP's version is separate.** Each request names the MCP revision it uses, and MCP's own rules settle that. This protocol's version says nothing about it, except that content blocks follow the MCP schema this version names (`2026-07-28` for `0.2.4`). A host skips block types it cannot handle.
 
 Every change to this specification that alters behavior goes through the [RFC process](../rfcs/README.md), bumps the version and is listed in the changelog at the end.
 
-## 12. Not in version 0.2.3
+## 12. Not in version 0.2.4
 
 - **What changed.** A request for what changed since a point the host names ("a task was moved to tomorrow"), so an agent can resolve "what I just did."
-- **Watching a location or the pointer.** A provider telling the host when a location or the pointer's position changes. Version 0.2.3 allows a watch on `current` only ([4.4](operations.md#44--watch)), and a change in `hovered` alone is not told.
+- **Watching a location or the pointer.** A provider telling the host when a location or the pointer's position changes. Version 0.2.4 allows a watch on `current` only ([4.4](operations.md#44--watch)), and a change in `hovered` alone is not told.
 - **Other visible apps.** One line of context for each visible app that is not in front.
 - **Actions.** A provider declaring operations an agent can run on an element.
 - **Things that are not open.** Search over what the app holds but is not showing.
 - **One program answering for another that the app did not start.** A helper the app started is defined in section 8; one started by the user or another program, such as a bridge to an app's local server, needs a different ground for trust, such as the user's approval of a signed helper.
+- **Finer marks of sensitivity.** `sensitive` ([4.5](operations.md#45--sensitive)) is one bit about a whole answer. Marking one element or span, naming a kind of sensitivity, and passing the mark on to the agent are not in this version.
 - **`display` for the agent.** Passing the app's wording ([4.3](operations.md#43--display)) on to the agent, so that it is told the words the user saw.
 - **A provider with no token.**
 - **Discovery for sandboxed and web apps.** See the end of section 8.
-- **Profiles for other platforms.** Version 0.2.3 defines the macOS profile only ([8.1](discovery.md#81--platform-profiles)).
+- **Profiles for other platforms.** Version 0.2.4 defines the macOS profile only ([8.1](discovery.md#81--platform-profiles)).
 
 ## 13. Open questions
 
@@ -42,13 +43,15 @@ Every change to this specification that alters behavior goes through the [RFC pr
 11. Whether a touch-and-hold on a device with no pointer deserves the same state.
 12. Whether a watch should tell of the pointer. A change in `hovered` alone sends no notice ([4.4](operations.md#44--watch)), so a host that showed the hovered thing would show a stale one. No host does today.
 13. The numbers for a watch: 250 milliseconds between notices, 15 seconds between keep-alives, four as the least number of watches a provider holds, ten minutes as the age at which it may end one. They were chosen from what the first host needed and are to be set from what the first providers do.
-14. Whether a host with more than one interface showing context at once holds one watch or one for each. Version 0.2.3 says one.
+14. Whether a host with more than one interface showing context at once holds one watch or one for each. Version 0.2.4 says one.
 15. Watching on a shared listener. It needs the app's server to hold a response open, which "one request in, one response out" does not describe. The first packages offer `watch` only on a listener of their own.
-16. Whether a provider that can report any site, such as a browser's helper, should answer only callers the user approved. Version 0.2.3 narrows what such a provider reports ([9.1](security.md#91--for-providers)) and leaves the caller check as the token.
+16. Whether a provider that can report any site, such as a browser's helper, should answer only callers the user approved. Version 0.2.4 narrows what such a provider reports ([9.1](security.md#91--for-providers)) and leaves the caller check as the token.
 17. A second ground for trust, for a provider that answers for an app that did not start it, such as the user's approval of a signed helper. It would use the same `for` field.
+18. `sensitive`: whether it belongs on the answer or in the descriptor, whether a host's confirmation should be a requirement or advice, and its name. Version 0.2.4 puts it on the answer and requires the confirmation (RFC-0007, section 9).
 
 ## Changelog
 
+- `0.2.4` · `2026.11.18` · Additive. The answer to `current` may carry `"sensitive": true`, by which an app says that what the answer holds is likely private ([4.5](operations.md#45--sensitive)) (RFC-0007). A provider sends it only as `true`; a host reads anything else as absent, asks the user before sending context so marked unless the user chose not to be asked for that app, and never reads its absence as a reason to skip a warning of its own ([9.1](security.md#91--for-providers), [9.2](security.md#92--for-hosts)). A `0.2.3` host works with a `0.2.4` provider unchanged and ignores the field. The schema is `schema/current-0.2.4.json`.
 - `0.2.3` · `2026.11.18` · Additive. A provider may answer for an app that started it and cannot listen itself, such as a browser through an extension's helper: the descriptor gains an optional `for`, in a file named `<for.id>.<for.pid>.for.<pid>.json`, and a host accepts it only when the front app has no descriptor of its own and is the provider's direct parent ([8](discovery.md#8-discovery)) (RFC-0004). Such a provider sets `via` on its root, and a provider that can report any site keeps a list of sites never read ([9.1](security.md#91--for-providers)). A `0.2.2` host never opens these files. The schema is `schema/current-0.2.3.json`.
 - `0.2.2` · `2026.11.17` · Additive. A host that is showing the user a provider's context may watch it: one request held open, on which the provider says, with no content, that its answer to `current` changed, and the host reads again ([4.4](operations.md#44--watch), [7.7](binding.md#77--watching)) (RFC-0006). Carried by MCP's `subscriptions/listen`. Optional for a provider; a `0.2.1` provider or host is unaffected. Principle 3 is reworded and no longer provisional.
 - `0.2.1` · `2026.11.17` · Additive. The answer to `current` may carry `display`, the app's own `title` and `detail` for the line a host shows the user ([4.3](operations.md#43--display)), and an app may ship a favicon at a place its platform's profile names, which a host finds itself and no message carries ([8.2](discovery.md#82--the-apps-favicon)) (RFC-0005). A `0.2.0` host and a `0.2.1` provider work together unchanged. The schema is `schema/current-0.2.1.json`.

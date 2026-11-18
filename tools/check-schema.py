@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Check schema/current-0.2.3.json against the specification's own examples.
+"""Check schema/current-0.2.4.json against the specification's own examples.
 
 Every `current` answer shown in docs/spec and README.md must validate, and
 a set of wrong answers, a 0.1 answer among them, must not. The examples
-must include answers with `display` and without it.
+must include answers with `display` and without it, and with `sensitive`
+and without it.
 
 Needs the `jsonschema` package: python3 -m pip install jsonschema
 Usage: python3 tools/check-schema.py
@@ -15,12 +16,12 @@ import sys
 
 from jsonschema import Draft202012Validator
 
-schema = json.load(open("schema/current-0.2.3.json"))
+schema = json.load(open("schema/current-0.2.4.json"))
 Draft202012Validator.check_schema(schema)
 validator = Draft202012Validator(schema)
 
 examples = []
-for path in ["README.md", "docs/spec/overview.md", "docs/spec/elements.md"]:
+for path in ["README.md", "docs/spec/overview.md", "docs/spec/elements.md", "docs/spec/operations.md"]:
     for block in re.findall(r"```json\n(.*?)```", open(path).read(), re.S):
         try:
             value = json.loads(block)
@@ -69,10 +70,15 @@ wrong = {
     "a text block with no text": changed(lambda v: first_child(v).update(content=[{"type": "text"}])),
     "protocol 0.2.0": changed(lambda v: v.update(protocol="0.2.0")),
     "protocol 0.2.1": changed(lambda v: v.update(protocol="0.2.1")),
+    "protocol 0.2.3": changed(lambda v: v.update(protocol="0.2.3")),
     "a display that is a string": changed(lambda v: v.update(display="draft.md")),
     "a display title that is a number": changed(lambda v: v.update(display={"title": 3})),
     "a display detail over two lines": changed(lambda v: v.update(display={"title": "draft.md", "detail": "lines\n12"})),
     "a display title of 81 characters": changed(lambda v: v.update(display={"title": "x" * 81})),
+    "sensitive sent as false": changed(lambda v: v.update(sensitive=False)),
+    "a sensitive that is a string": changed(lambda v: v.update(sensitive="true")),
+    "a sensitive that is the number 1": changed(lambda v: v.update(sensitive=1)),
+    "a sensitive that is null": changed(lambda v: v.update(sensitive=None)),
 }
 for name, value in wrong.items():
     refused = not validator.is_valid(value)
@@ -84,6 +90,8 @@ right = {
     "a display with a title and a detail": changed(lambda v: v.update(display={"title": "draft.md", "detail": "lines 12–18"})),
     "a display with a title only": changed(lambda v: v.update(display={"title": "draft.md"})),
     "an empty display": changed(lambda v: v.update(display={})),
+    "an answer with no sensitive": changed(lambda v: v.pop("sensitive", None)),
+    "sensitive sent as true": changed(lambda v: v.update(sensitive=True)),
 }
 for name, value in right.items():
     accepted = validator.is_valid(value)
@@ -94,4 +102,8 @@ with_display = [value for _path, value in examples if "display" in value]
 if not examples or not with_display or len(with_display) == len(examples):
     failures += 1
     print("FAILED  the examples must include answers with and without display")
+with_sensitive = [value for _path, value in examples if "sensitive" in value]
+if not with_sensitive or len(with_sensitive) == len(examples):
+    failures += 1
+    print("FAILED  the examples must include answers with and without sensitive")
 sys.exit(1 if failures else 0)

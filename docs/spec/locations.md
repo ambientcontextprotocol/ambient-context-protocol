@@ -1,6 +1,6 @@
 # Ambient Context Protocol · Locations
 
-> Part of the [specification](index.md), version `0.2.3`.
+> Part of the [specification](index.md), version `0.2.4`.
 
 ## 6. Locations
 

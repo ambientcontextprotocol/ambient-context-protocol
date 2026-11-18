@@ -1,6 +1,6 @@
 # Ambient Context Protocol · Rules
 
-> Part of the [specification](index.md), version `0.2.3`.
+> Part of the [specification](index.md), version `0.2.4`.
 
 ## 9. Rules
 
@@ -20,6 +20,8 @@
 - **Keep a list of sites never read.** A provider that can report any site, such as a browser's, keeps a list of sites whose pages it does not read, which the user can see and change. For a listed site it may name the page and reports nothing in it, not even the selection. The list starts with the sites where people sign in and keep passwords.
 - **Name an author only where the app does.** The `author` attribute attaches a person's name to content. A provider sends it only where the app already shows it.
 - **Say no more in `display` than in the tree.** `display` ([4.3](operations.md#43--display)) labels the answer it is in. It holds no content the provider does not report as an element, and names nothing from an element the provider left out.
+- **Redact what you report.** Removing or masking private details inside what it reports is the provider's job. The app knows which of its content is private, and it reports only what should leave it. A provider does not rely on a host to inspect, classify or clean an answer: none is required to ([9.2](#92--for-hosts)).
+- **Marking is not leaving out.** `sensitive` ([4.5](operations.md#45--sensitive)) marks content the provider is right to report and the user may not want sent. It does not replace leaving things out: what a provider must never report, it still never reports, because a host written before `0.2.4` ignores the mark. A provider sends it only as `true` and never sends `false` to claim an answer is safe.
 - **Keep the token and answers out of logs.** A provider does not write its token, or anything from an answer, to a log.
 
 ### 9.2 — For hosts
@@ -33,6 +35,9 @@
 - **Show what was collected.** Before a message is sent, the user must be able to see which context will go with it, and remove it.
 - **A label is not the context.** `display` ([4.3](operations.md#43--display)) is the app's wording for what was collected. A host that shows it still lets the user remove the context it labels, draws it as plain text from another program, and never refuses an answer because `display` is missing or malformed.
 - **Find the favicon yourself.** A host reads an app's favicon only from the profile's place in the installed app whose process it identified ([8.2](discovery.md#82--the-apps-favicon)), never from a place a provider names.
+- **Ask before sending what an app marked sensitive.** A host that holds an answer with `"sensitive": true` ([4.5](operations.md#45--sensitive)) does not send that context to an agent, or anywhere off the device, until the user has confirmed that send knowing which app it came from, or has earlier told the host not to ask for that app. A host with no way to ask leaves the context out and tells the user it did. The user's choice not to be asked is kept per app, for the app answered for when a helper answers, and can be undone.
+- **Redaction is the provider's.** A host is not required to inspect, classify or redact the content of an answer. `sensitive` asks a host for the user's confirmation, not to clean the answer. A host may still do more as a feature of its own.
+- **No mark is not a clearance.** Only the JSON value `true` marks an answer; `false`, a missing field and any other type are read as absent, and never cause a host to refuse the answer. A host never reads the absence of `sensitive`, or `"sensitive": false`, as a reason to skip a warning it would otherwise give.
 - **Pass ids through unchanged.** When an agent names an element, use exactly the id the provider issued.
 - **Keep the provider with the id.** Record which provider and which `instance` issued every id passed to an agent. When the agent names an id later, ask that provider only, and only if its instance is unchanged. If the provider has quit or restarted, treat the element as gone. Never look an id up again by app name or process id.
 - **Removed means removed.** If the user removes context, or sends the message, while a provider's answer is still on its way, the late answer is discarded.

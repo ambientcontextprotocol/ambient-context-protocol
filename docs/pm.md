@@ -2,9 +2,9 @@
 
 Last updated: `2026.11.18`
 
-> A protocol by which a desktop app tells an ambient agent host what the user has open, what they have selected, and where an element is on screen. Version `0.2.4`; requirements are marked with the versions they hold in. First provider: Paper. First host: Sirius. Task: SIR-0105.
+> A protocol by which a desktop app tells an ambient agent host what the user has open, what they have selected, and where an element is on screen. Version `0.2.4`; requirements are marked with the versions they hold in. First provider: Paper. First host: Sirius.
 
-**Status.** Draft for Andrew's review. Nothing here is in the graph. The structure uses the product ontology as edited on 2026.11.09 (Domain, Feature, Requirement, Verification; the Product level is left out because this repository holds one product). The requirements restate the design in the [plan](../../paper/.plan/ambient-context-provider.md) and the [protocol draft](spec/index.md); most of their wording is Claude's and unconfirmed. All method, field and path names are placeholders.
+**Structure.** Domains, Features, Requirements and Verifications; each Requirement restates the [specification](spec/index.md) as something an outside check can test.
 
 ## Contents
 
@@ -277,7 +277,7 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 
 ## 4. Verifications
 
-Each Verification checks one Requirement; a Requirement may have several. The "Plan" column gives the "Done when" line in the [plan](../../paper/.plan/ambient-context-provider.md) §1 that it came from. Lines there that covered several Requirements are split. A dash marks a Verification added after the adversarial review of 2026.11.09, with no line in the plan yet.
+Each Verification checks one Requirement; a Requirement may have several. The "Plan" column numbers the line of the original implementation plan each came from; a dash marks one added later.
 
 | Verification | Description | Verifies | Plan |
 |---|---|---|---|

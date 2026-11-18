@@ -4,7 +4,7 @@
 
 > A way for a desktop app to tell an agent what you have open, what you have selected, and where it is on screen.
 
-**Draft 0.2.4.** The specification is written to 0.2.4; the packages and the first apps are moving to it and still exchange 0.1. Every name below may change.
+**Draft 0.2.4.** The specification, the schema and both packages are at 0.2.4. Every name below may change.
 
 ## What it is
 

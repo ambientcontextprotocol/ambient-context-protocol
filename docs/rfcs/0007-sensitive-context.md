@@ -45,6 +45,7 @@ Scope and exclusions:
 - `sensitive` is one bit about the whole answer. It does not mark elements, spans or kinds of data, and it is not a classifier's verdict.
 - It asks for more care, never less. Its absence says nothing: a host may still treat any app as sensitive by its own list or its own judgment.
 - It is not protection. A host written before this version ignores it, so a provider must still leave out what it should never report (9.1). `sensitive` is for content the provider is right to report and the user may not want sent.
+- Redaction is the provider's job. Removing or masking private details inside what it reports is the app's responsibility: the app knows which of its content is private, and it reports only what should leave it. A host is not required to inspect, classify or redact the content of an answer, and a provider must not rely on a host doing so. `sensitive` is the provider's way to ask for the user's confirmation for what it does report; it is not a request for the host to clean the answer.
 - It is for the host and the user. This RFC does not ask a host to pass it to the agent.
 - A provider may send it on every answer (a mail client) or only on some (a browser, for a page behind a sign-in). The rule for choosing is the provider's.
 
@@ -53,8 +54,8 @@ Scope and exclusions:
 1. *The answer to `current` (4.1).* One more optional field: `sensitive`, a boolean.
 2. *`sensitive` (new 4.4).* A provider sends `"sensitive": true` when what the answer holds is likely private to the user or to another person. It describes the same moment and the same tree as the answer it is in. A provider that has no reason to say so leaves the field out; it does not send `false` to claim the content is safe.
 3. *What a host does with it (4.4, 9.2).* Only the JSON value `true` counts. `false`, a missing field and a value of any other type are all read as absent, and never cause a host to refuse the answer. A host that holds an answer marked sensitive does not send that context to an agent, or anywhere off the device, until the user has confirmed that send knowing which app it came from, or has earlier told the host not to ask for that app. How the host asks is its own business. When the host has no way to ask, it leaves the context out and tells the user it did.
-4. *Rules for providers (9.1).* `sensitive` does not replace leaving things out. What a provider must never report, it still never reports.
-5. *Rules for hosts (9.2).* A host never reads the absence of `sensitive`, or `"sensitive": false`, as a reason to skip a warning it would otherwise give. The user's choice not to be asked again is kept per app and can be undone.
+4. *Rules for providers (9.1).* `sensitive` does not replace leaving things out. What a provider must never report, it still never reports. Redaction, removing or masking private details inside what it reports, is the provider's responsibility: it reports only what should leave the app, and it does not rely on a host to inspect or clean an answer.
+5. *Rules for hosts (9.2).* A host never reads the absence of `sensitive`, or `"sensitive": false`, as a reason to skip a warning it would otherwise give. The user's choice not to be asked again is kept per app and can be undone. A host is not required to inspect, classify or redact the content of an answer; a mark of `sensitive` asks it for the user's confirmation, not to clean the answer.
 6. *A provider that answers for another app (8).* The field means the same from a helper. The app the host names to the user, and keeps the user's choice for, is the app answered for.
 7. *The version (10).* `0.2.4`. A provider that sends `sensitive` gives `0.2.4` in the descriptor, the extension declaration and the answer. A `0.2.3` host works with it unchanged and ignores the field.
 
@@ -92,7 +93,7 @@ The requirement that the answer holds exactly its listed fields is replaced from
 - *In the descriptor, once per run.* Simpler to read before any context is taken, and enough for a mail client. Not chosen: the descriptor folder is writable by other programs (section 6, item 4), and a browser's answer is sensitive for some pages and not others, which a once-per-run file cannot say. A host that wants to label an app as sensitive in its settings can remember that the app has said so.
 - *Per element.* A provider could mark the one field that holds an address. It would let a host strip only that. It asks every provider to classify its own content at a finer grain than most can, and a host still needs the answer-level question "should I ask?". Left to a later proposal, which this field does not block.
 - *Kinds of sensitivity* (`"sensitive": "financial"`). More to agree on and no host behavior that differs by kind yet.
-- *A classifier in the host* (issue #1's first option). It catches what no app marked, and it is a host's own feature, needing nothing from the protocol. The two work together: the mark is cheap and certain where it exists, the classifier covers the rest.
+- *A classifier in the host* (issue #1's first option). Not what the protocol relies on: it places the duty to redact on the provider, which knows its own content, and no host is expected to inspect or classify an answer. A host may still do so as a feature of its own, needing nothing from the protocol, and it would catch what no app marked.
 - *Do nothing.* Each host keeps a list. That is today, and it stays as the floor under this field.
 - *Prior art.* macOS lets a window opt out of screen capture (`NSWindow.sharingType`), and Android's `FLAG_SECURE` does the same: the app, not the capturing program, says "this is private". Password fields have long told the system not to record what is typed. All are declarations by the content's owner that the reader is expected to honor.
 
@@ -111,5 +112,7 @@ The requirement that the answer holds exactly its listed fields is replaced from
 Accepted on 2026.11.18 by Andrew Jones, maintainer, on the revision of commit `38a51f3`, for protocol version `0.2.4`. His words, as relayed by the sirius-claude session, were "looks good on the sensitive thing".
 
 The open questions in section 9 stay open during implementation. It is built as the draft states: `sensitive` is declared on the answer, and a host may keep its own list.
+
+On the same day, before implementation, the maintainer added that redaction is the provider's job and not the host's. His words, as relayed by the sirius-claude session: "i also think we should maybe note that it should be the apps responsibility to redact sensitive info. that should actually not be the job of Sirius. we should leave that to the apps". Sections 3, 4 (items 4 and 5) and 8 were revised to say so, and that text is part of what was accepted, not an amendment.
 
 One correction for the implementation: the specification already has a section 4.4 (watch, from RFC-0006), so the section this RFC calls "new 4.4" is written as 4.5.

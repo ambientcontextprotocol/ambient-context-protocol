@@ -1,6 +1,6 @@
 # Ambient Context for Chrome
 
-> A provider of the [Ambient Context Protocol](../../docs/spec/index.md) for Chrome and other Chromium browsers: an extension and a small helper program that together tell a host which page is in front, what of it is in view and what text is selected on it. It depends on [RFC-0004](../../docs/rfcs/0004-a-provider-started-by-the-app.md), which is a draft, so it is experimental.
+> A provider of the [Ambient Context Protocol](../../docs/spec/index.md) for Chrome and other Chromium browsers: an extension and a small helper program that together tell a host which page is in front, what of it is in view and what text is selected on it. It depends on [RFC-0004](../../docs/rfcs/0004-a-provider-started-by-the-app.md), accepted for protocol version `0.2.3`.
 
 ## What it is
 

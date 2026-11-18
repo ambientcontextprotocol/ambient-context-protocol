@@ -180,6 +180,9 @@ let server = ContextServer(
     app: ContextApp(id: "io.github.ambientcontextprotocol.chrome", name: "Ambient Context for Chrome", version: version),
     answersFor: ContextTarget(id: targetID, pid: parent),
     directory: directory ?? ContextDescriptor.defaultDirectory,
+    // The extension says nothing when the page or the selection changes,
+    // so this program cannot tell a watching host; it offers no watch.
+    watch: false,
     current: {
         let state = await bridge.current()
         return await pages.tree(state, browserActive: await Browser.isActive())

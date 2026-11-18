@@ -1,6 +1,6 @@
 # Ambient Context for Swift
 
-Makes a macOS app a provider of the [Ambient Context Protocol](../../docs/spec/index.md), version 0.2.2: it runs the local server, answers the protocol's requests and keeps the descriptor file a host finds the app by. The app writes one thing, a description of what the user has open and selected.
+Makes a macOS app a provider of the [Ambient Context Protocol](../../docs/spec/index.md), version 0.2.3: it runs the local server, answers the protocol's requests and keeps the descriptor file a host finds the app by. The app writes one thing, a description of what the user has open and selected.
 
 It has no dependencies beyond Foundation and Network, and needs macOS 14 or later.
 
@@ -152,6 +152,21 @@ The responder refuses `Origin` and checks the token before anything else. Four t
 - Requests to that path reach the responder before any other handling, and no middleware adds cross-origin headers to its responses or answers a preflight for it.
 - The token is made for this endpoint and is not a credential the server accepts anywhere else.
 - Neither the token nor a response body is written to the server's logs.
+
+## For an app that started this program
+
+A helper an app starts, such as the program a browser runs for an extension, can answer for that app ([RFC-0004](../../docs/rfcs/0004-a-provider-started-by-the-app.md)). Name the app with `answersFor`, which must be this process's parent, and give the answer as a closure, which may ask the app and wait briefly. Put `via` on the root, and pass `watch: false` unless the app tells the helper when its answer changes.
+
+```swift
+let server = ContextServer(
+    app: ContextApp(id: "org.example.helper", name: "Helper", version: "1.0"),
+    answersFor: ContextTarget(id: "com.google.Chrome", pid: getppid()),
+    watch: false,
+    current: { await askTheBrowser() }
+)
+```
+
+The descriptor is written as `<app-id>.<app-pid>.for.<pid>.json`. A host accepts it only if the app in front started this process. `providers/chrome` is a complete example.
 
 ## Try it
 

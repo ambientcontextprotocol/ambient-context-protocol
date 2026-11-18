@@ -2,7 +2,7 @@ import Foundation
 import Network
 import Observation
 
-// A provider for the Ambient Context Protocol, version 0.2.2: a small
+// A provider for the Ambient Context Protocol, version 0.2.3: a small
 // MCP server on the loopback interface that answers `current` and
 // `locate` as two resources, and the descriptor file that tells a host
 // where it is. It is handed a `ContextProvider` and knows nothing else
@@ -177,7 +177,7 @@ public enum ContextCheck: Sendable {
 public struct ContextResponder: Sendable {
     typealias App = ContextApp
 
-    public static let protocolVersion = "0.2.2"
+    public static let protocolVersion = "0.2.3"
     public static let extensionID = "io.github.ambientcontextprotocol/context"
     /// The path `ContextServer` listens on, and the default.
     public static let endpointPath = "/mcp"
@@ -641,7 +641,7 @@ public struct ContextResponder: Sendable {
 // MARK: - Descriptor
 
 /// The app a provider answers for when it is not that app's own process
-/// (RFC-0004, a draft): a helper the app started, such as the program a
+/// (RFC-0004): a helper the app started, such as the program a
 /// browser runs for an extension.
 public struct ContextTarget: Equatable, Sendable, Encodable {
     /// The bundle identifier of the app answered for.
@@ -793,6 +793,9 @@ public final class ContextServer {
     private let delegated: (@Sendable () async -> ContextElement)?
     private let app: ContextResponder.App
     private let answersFor: ContextTarget?
+    /// False for a provider that cannot tell when its answer changes,
+    /// which then declares no watch.
+    private let offersWatch: Bool
     private let directory: URL
     private var listener: NWListener?
     private var descriptorURL: URL?
@@ -811,6 +814,7 @@ public final class ContextServer {
         self.delegated = nil
         self.app = app
         self.answersFor = nil
+        self.offersWatch = true
         self.directory = directory
         let queue = DispatchQueue(label: "org.humanitas.ambient-context.server")
         self.queue = queue
@@ -818,19 +822,25 @@ public final class ContextServer {
     }
 
     /// A provider that answers for another app, which started it
-    /// (RFC-0004, a draft). `app` names this program; `answersFor` names
-    /// the app whose context it reports. Such a provider gets its answer
-    /// from the app each time it is asked, so `current` may wait; it must
-    /// come back well inside a host's time limit, with the application
-    /// alone if the app did not answer.
+    /// (RFC-0004). `app` names this program; `answersFor` names the app
+    /// whose context it reports, which must be this process's parent.
+    /// Such a provider gets its answer from the app each time it is
+    /// asked, so `current` may wait; it must come back well inside a
+    /// host's time limit, with the application alone if the app did not
+    /// answer. Its root must carry the `via` attribute.
+    ///
+    /// Pass `watch: false` unless the app tells this program when its
+    /// answer changes, so that it can call `contextDidChange()`; a
+    /// provider that cannot know of changes does not offer a watch.
     public init(
         app: ContextApp, answersFor: ContextTarget, directory: URL = ContextDescriptor.defaultDirectory,
-        current: @escaping @Sendable () async -> ContextElement
+        watch: Bool = true, current: @escaping @Sendable () async -> ContextElement
     ) {
         self.provider = nil
         self.delegated = current
         self.app = app
         self.answersFor = answersFor
+        self.offersWatch = watch
         self.directory = directory
         let queue = DispatchQueue(label: "org.humanitas.ambient-context.server")
         self.queue = queue
@@ -921,7 +931,9 @@ public final class ContextServer {
         } else {
             return
         }
-        responder.watches = watches
+        if offersWatch {
+            responder.watches = watches
+        }
         let answering = responder
         watches.signature = { await answering.signature() }
         let queue = queue

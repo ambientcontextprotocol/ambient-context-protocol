@@ -104,7 +104,7 @@ struct PublicInterfaceTests {
 
         let current = try document(try await call(descriptor, "resources/read", uri: "ambient://current"))
         #expect(current["instance"] as? String == descriptor.instance)
-        #expect(current["protocol"] as? String == "0.2.2")
+        #expect(current["protocol"] as? String == "0.2.3")
         let root = try #require(current["root"] as? [String: Any])
         #expect(root["title"] as? String == "Notes")
         #expect((root["children"] as? [[String: Any]])?.first?["title"] as? String == "Groceries")
@@ -205,7 +205,7 @@ struct PublicInterfaceTests {
         try FileManager.default.removeItem(at: directory)
     }
 
-    /// A provider that answers for another app (RFC-0004, a draft): the
+    /// A provider that answers for another app (RFC-0004): the
     /// descriptor says which, and is named so a host finds it by that app.
     @Test func aDescriptorThatAnswersForAnotherApp() throws {
         let directory = FileManager.default.temporaryDirectory
@@ -244,5 +244,42 @@ struct PublicInterfaceTests {
         #expect(!FileManager.default.fileExists(atPath: file.path))
         #expect(FileManager.default.fileExists(atPath: live.path))
         #expect(FileManager.default.fileExists(atPath: plain.path))
+    }
+
+    /// A running provider for another app: it writes the descriptor
+    /// with `for`, answers `current` from its closure, and declares a
+    /// watch only when told it can know of changes.
+    @Test(arguments: [true, false])
+    func aServerThatAnswersForAnotherApp(watch: Bool) async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("acp-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let target = ContextTarget(id: "org.example.browser", pid: getppid())
+        let server = ContextServer(
+            app: ContextApp(id: "org.example.helper", name: "Helper", version: "1.0"),
+            answersFor: target, directory: directory, watch: watch,
+            current: {
+                ContextElement(id: "app", role: .application, title: "Browser", attributes: ["via": "browser-extension"])
+            }
+        )
+        server.start()
+        let file = directory.appendingPathComponent(
+            ContextDescriptor.fileName(answeringFor: target, pid: ProcessInfo.processInfo.processIdentifier)
+        )
+        for _ in 0..<200 where !FileManager.default.fileExists(atPath: file.path) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let descriptor = try JSONDecoder().decode(Descriptor.self, from: Data(contentsOf: file))
+
+        let current = try document(try await call(descriptor, "resources/read", uri: "ambient://current"))
+        let root = try #require(current["root"] as? [String: Any])
+        #expect((root["attributes"] as? [String: Any])?["via"] as? String == "browser-extension")
+
+        let discover = try #require(try await call(descriptor, "server/discover")["result"] as? [String: Any])
+        let resources = (discover["capabilities"] as? [String: Any])?["resources"] as? [String: Any]
+        #expect((resources?["subscribe"] as? Bool ?? false) == watch)
+
+        server.stop()
+        #expect(!FileManager.default.fileExists(atPath: file.path))
     }
 }

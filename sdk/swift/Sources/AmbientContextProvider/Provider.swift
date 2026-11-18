@@ -1,6 +1,6 @@
 import Foundation
 
-// The Ambient Context Protocol's types, version 0.2.2 (RFC-0001, the
+// The Ambient Context Protocol's types, version 0.2.3 (RFC-0001, the
 // element model; RFC-0003, the hovered state; RFC-0005, display), and the interface an app
 // implements to be a provider: `ContextProvider` to say what the user
 // has open and selected, and `ContextLocator` as well if it can also say

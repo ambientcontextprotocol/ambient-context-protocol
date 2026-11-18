@@ -4,7 +4,7 @@ Version `0.2.2` · Draft of `2026.11.17` · Not stable. Everything here may chan
 
 > The Ambient Context Protocol lets a desktop app tell an ambient agent what the user is looking at, so that "this" means something when the user asks a question. It also lets the agent's interface appear beside the thing in question. An app answers two questions: what is open and selected, as one tree of elements, and where an element is on screen. It may also say when the first answer changes. Version 0.2.2 is defined as an extension to the Model Context Protocol (MCP): both answers are MCP resources.
 
-Version 0.2.0 is the result of three accepted proposals: [RFC-0001, the element model](../rfcs/0001-element-model.md), [RFC-0002, a provider on a listener the app already has](../rfcs/0002-shared-listener.md) and [RFC-0003, a hovered state](../rfcs/0003-hovered-state.md). Version 0.2.1 adds one proposal: [RFC-0005, the app's words and favicon for what was read](../rfcs/0005-display-and-favicon.md). Version 0.2.2 adds another: [RFC-0006, watching current](../rfcs/0006-watching.md). Where this specification and an RFC differ, this specification is the contract and the difference is a defect to report.
+The accepted proposals behind each version are in the [RFCs](../rfcs/README.md). Where this specification and an RFC differ, this specification is the contract and the difference is a defect to report.
 
 ## Contents
 

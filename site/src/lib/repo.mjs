@@ -6,7 +6,7 @@ export const repoBranch = 'master';
 
 /**
  * The address of a file in the repository.
- * @param {string} path Path from the repository root, for example `schema/current-0.2.2.json`.
+ * @param {string} path Path from the repository root, for example `schema/current-0.2.3.json`.
  * @returns {string}
  */
 export function repoFileUrl(path) {

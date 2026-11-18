@@ -1,6 +1,6 @@
 # Ambient Context Protocol · The MCP binding
 
-> Part of the [specification](index.md), version `0.2.2`.
+> Part of the [specification](index.md), version `0.2.3`.
 
 ## 7. The MCP binding
 
@@ -21,7 +21,7 @@ A provider is an MCP server. The two reads are MCP resources, and the watch is a
 2. The provider does not answer a cross-origin preflight (`OPTIONS`) on that path with permission, and no response from that path carries an `Access-Control-Allow-*` header.
 3. Neither the token nor anything from an answer is written to the server's logs.
 
-A provider answered by a different process than the app, and a provider without a token, are not defined by this version.
+A provider answered by a different process than the app is defined only for a process the app started ([section 8](discovery.md#8-discovery)). A provider without a token is not defined by this version.
 
 ### 7.2 — Declaring the extension
 
@@ -34,7 +34,7 @@ The provider lists the extension in its capabilities, which a client gets from `
   "capabilities": {
     "resources": {},
     "extensions": {
-      "io.github.ambientcontextprotocol/context": { "version": "0.2.2" }
+      "io.github.ambientcontextprotocol/context": { "version": "0.2.3" }
     }
   },
   "_meta": {

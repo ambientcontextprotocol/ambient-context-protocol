@@ -1,8 +1,8 @@
 # Ambient Context Protocol · Product Model
 
-Last updated: `2026.11.17`
+Last updated: `2026.11.18`
 
-> A protocol by which a desktop app tells an ambient agent host what the user has open, what they have selected, and where an element is on screen. Version `0.2.2`; requirements are marked with the versions they hold in. First provider: Paper. First host: Sirius. Task: SIR-0105.
+> A protocol by which a desktop app tells an ambient agent host what the user has open, what they have selected, and where an element is on screen. Version `0.2.3`; requirements are marked with the versions they hold in. First provider: Paper. First host: Sirius. Task: SIR-0105.
 
 **Status.** Draft for Andrew's review. Nothing here is in the graph. The structure uses the product ontology as edited on 2026.11.09 (Domain, Feature, Requirement, Verification; the Product level is left out because this repository holds one product). The requirements restate the design in the [plan](../../paper/.plan/ambient-context-provider.md) and the [protocol draft](spec/index.md); most of their wording is Claude's and unconfirmed. All method, field and path names are placeholders.
 
@@ -180,6 +180,9 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 | **PR-061** — Answer version | A host ignores an answer whose `protocol` differs from the descriptor's. | Host | P0 | — | 0.2.0 | — | — |
 | **PR-078** — Favicon place | An app that ships a favicon for hosts ships one SVG or PNG image at the place its platform's profile gives (specification 8.1); on macOS, `Contents/Resources/favicon.svg` in the app's bundle, or `favicon.png` there when there is no SVG. A PNG is at least 32 by 32 pixels. No descriptor or answer names or carries it. | Provider | P1 | — | 0.2.1 | — | [0005](rfcs/0005-display-and-favicon.md) |
 | **PR-079** — Favicon found by the host | A host reads an app's favicon only from the profile's place in the installed app whose process it identified as in front, never from a path, URL or bytes a provider or descriptor names. It bounds the size it reads and treats a file that is missing, too large or not a readable image as absent. | Host | P0 | — | 0.2.1 | — | [0005](rfcs/0005-display-and-favicon.md) |
+| **PR-093** — Answering for the app that started it | A provider writes `for` only when the app it names is its parent process, names its descriptor `<for.id>.<for.pid>.for.<pid>.json`, and removes it when that app closes its connection or quits. | Provider | P0 | — | 0.2.3 | — | [0004](rfcs/0004-a-provider-started-by-the-app.md) |
+| **PR-094** — A helper is accepted only from its app | A host looks for a provider that answers for the front app only when that app has no descriptor of its own. It accepts one only when `for` names the front app and its process, the provider passes every check an app's own provider passes, and the front app is the provider's direct parent; it refuses one whose parent is any other process. | Host | P0 | — | 0.2.3 | — | [0004](rfcs/0004-a-provider-started-by-the-app.md) |
+| **PR-095** — Several helpers | When more than one provider answers for the front app, a host uses the answer whose tree has a focus path, or the first to answer if none has. It may bound how many it reads. | Host | P1 | — | 0.2.3 | — | [0004](rfcs/0004-a-provider-started-by-the-app.md) |
 
 **F-DI2 — Discovery without a descriptor** · P2. A provider that cannot announce itself with a descriptor is still found.
 
@@ -216,7 +219,8 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 | **PR-066** — Declared version, three places | A provider gives the same version, `0.2.0`, in the MCP extension `"io.github.ambientcontextprotocol/context": {"version": "0.2.0"}`, in the descriptor and in the `current` answer. Replaces PR-027. | Provider | P0 | — | 0.2.0 | 0.2.0 | [0001](rfcs/0001-element-model.md) |
 | **PR-067** — Version agreement | Before 1.0 a host and a provider work together only if they agree on the major and minor parts of the version. A patch version only adds. | Both | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
 | **PR-068** — Unknown role | A receiver treats a role it does not know as `Group`. | Both | P0 | — | 0.2.0 | — | [0001](rfcs/0001-element-model.md) |
-| **PR-092** — Declared version, three places | A provider gives the same version, `0.2.2`, in the MCP extension `"io.github.ambientcontextprotocol/context": {"version": "0.2.2"}`, in the descriptor and in the `current` answer. Replaces PR-073. | Provider | P0 | — | 0.2.2 | — | [0006](rfcs/0006-watching.md) |
+| **PR-092** — Declared version, three places | A provider gives the same version, `0.2.2`, in the MCP extension `"io.github.ambientcontextprotocol/context": {"version": "0.2.2"}`, in the descriptor and in the `current` answer. Replaces PR-073. | Provider | P0 | — | 0.2.2 | 0.2.2 | [0006](rfcs/0006-watching.md) |
+| **PR-098** — Declared version, three places | A provider gives the same version, `0.2.3`, in the MCP extension `"io.github.ambientcontextprotocol/context": {"version": "0.2.3"}`, in the descriptor and in the `current` answer. Replaces PR-092. | Provider | P0 | — | 0.2.3 | — | [0004](rfcs/0004-a-provider-started-by-the-app.md) |
 | **PR-073** — Declared version, three places | A provider gives the same version, `0.2.1`, in the MCP extension `"io.github.ambientcontextprotocol/context": {"version": "0.2.1"}`, in the descriptor and in the `current` answer. Replaces PR-066. | Provider | P0 | — | 0.2.1 | 0.2.1 | [0005](rfcs/0005-display-and-favicon.md) |
 
 ### 3.7 — Security
@@ -232,6 +236,8 @@ Each Feature is followed by the Requirements that specify it. "On" says who must
 | **PR-069** — Token for this endpoint only | The token is not a credential the app's server accepts anywhere else. | Provider | P0 | — | 0.2.0 | — | [0002](rfcs/0002-shared-listener.md) |
 | **PR-070** — Nothing in logs | A provider writes neither its token nor anything from an answer to a log. | Provider | P0 | — | 0.2.0 | — | [0002](rfcs/0002-shared-listener.md) |
 | **PR-087** — Watch behind the same checks | The watch request is refused without the token (`401`) and with an `Origin` header (`403`) before any stream opens. | Provider | P0 | — | 0.2.2 | — | [0006](rfcs/0006-watching.md) |
+| **PR-096** — Second-hand is said | A provider that answers for another app sets `via` among the root's attributes, a short lowercase word for how it learned what it reports (`browser-extension` for a browser extension's helper). | Provider | P0 | — | 0.2.3 | — | [0004](rfcs/0004-a-provider-started-by-the-app.md) |
+| **PR-097** — Sites never read | A provider that can report any site keeps a list of sites whose pages it does not read, which the user can see and change, starting with sign-in and password sites. For a listed site it reports nothing in the page. Not checkable from outside: an inspection of the provider. | Provider | P0 | — | 0.2.3 | — | [0004](rfcs/0004-a-provider-started-by-the-app.md) |
 
 ### 3.8 — Host
 
@@ -291,6 +297,8 @@ Each Verification checks one Requirement; a Requirement may have several. The "P
 ---
 
 ## 5. Coverage
+
+*Version 0.2.3.* 86 Requirements hold: RFC-0004 retired PR-092 and added PR-093 to PR-098, for a provider started by the app it answers for. The outside check covers PR-093, PR-096 and PR-098 when run on a descriptor; PR-094 and PR-095 are tested in the host, and PR-097 is an inspection.
 
 *Version 0.2.2.* 81 Requirements hold: RFC-0006 retired PR-035 and PR-073 and added PR-080 to PR-092, for watching `current`.
 

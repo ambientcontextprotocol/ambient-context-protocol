@@ -1,6 +1,6 @@
 # Ambient Context Protocol · Operations
 
-> Part of the [specification](index.md), version `0.2.2`.
+> Part of the [specification](index.md), version `0.2.3`.
 
 ## 4. Operations
 
@@ -16,14 +16,14 @@ Result, an object with these fields and no others:
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `protocol` | string | yes | The version of this protocol the answer follows: `"0.2.2"`. The same value as in the descriptor and the extension declaration ([section 10](versioning.md#10-versioning)). |
+| `protocol` | string | yes | The version of this protocol the answer follows: `"0.2.3"`. The same value as in the descriptor and the extension declaration ([section 10](versioning.md#10-versioning)). |
 | `instance` | string | yes | A random value the provider mints each time it starts. It identifies this run of the provider. See [ids and instances](elements.md#54--ids-and-instances). |
 | `root` | [element](elements.md#5-elements) | yes | The app, as an element with role `Application`. Everything the provider reports is inside it. |
 | `display` | object | no | The app's own words for what this answer holds, for the host to show the user. See [4.3](#43--display). |
 
 The app's name is the root's `title`. Its identifier is in the descriptor ([section 8](discovery.md#8-discovery)), not in the answer.
 
-The result's shape is also given as a JSON Schema, [`schema/current-0.2.2.json`](../../schema/current-0.2.2.json). The schema checks what a schema can; unique ids, the focus path and the single hovered element are rules of [section 5](elements.md#5-elements) it cannot state.
+The result's shape is also given as a JSON Schema, [`schema/current-0.2.3.json`](../../schema/current-0.2.3.json). The schema checks what a schema can; unique ids, the focus path and the single hovered element are rules of [section 5](elements.md#5-elements) it cannot state.
 
 What the user is pointing at is not a separate field. It is stated on the elements themselves, as the states `selected`, `focused` and `hovered` ([5.3](elements.md#53--states)).
 

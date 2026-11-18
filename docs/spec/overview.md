@@ -1,6 +1,6 @@
 # Ambient Context Protocol · Overview
 
-> Part of the [specification](index.md), version `0.2.2`.
+> Part of the [specification](index.md), version `0.2.3`.
 
 **An extension to MCP.** The Ambient Context Protocol is an extension to the Model Context Protocol (MCP), not a protocol of its own. A provider is an ordinary MCP server, the two answers are ordinary MCP resources, and a client that has never heard of the extension can still list and read them. It is called a protocol to give it a short name to refer to.
 
@@ -67,7 +67,7 @@ Decoded, the text is one tree of elements:
 
 ```json
 {
-  "protocol": "0.2.2",
+  "protocol": "0.2.3",
   "instance": "k3f9x2",
   "display": { "title": "draft.md", "detail": "line 31" },
   "root": {

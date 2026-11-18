@@ -4,7 +4,7 @@
 
 > A way for a desktop app to tell an agent what you have open, what you have selected, and where it is on screen.
 
-**Draft 0.2.2.** The specification is written to 0.2.2; the packages and the first apps are moving to it and still exchange 0.1. Every name below may change.
+**Draft 0.2.3.** The specification is written to 0.2.3; the packages and the first apps are moving to it and still exchange 0.1. Every name below may change.
 
 ## What it is
 
@@ -18,7 +18,7 @@ A provider answers two questions.
 
 ```json
 {
-  "protocol": "0.2.2",
+  "protocol": "0.2.3",
   "instance": "k3f9x2",
   "root": {
     "id": "app", "role": "Application", "title": "Editor",
@@ -66,7 +66,7 @@ A running provider announces itself with a descriptor file that only the user ca
 
 | | |
 |---|---|
-| Specification | [Draft 0.2.2](docs/spec/index.md) |
+| Specification | [Draft 0.2.3](docs/spec/index.md) |
 | First provider | [Paper](https://github.com/humanitas-labs/paper), a Markdown editor for macOS. Planned. |
 | First host | Sirius. Planned. |
 | Platforms | macOS first |
@@ -74,7 +74,7 @@ A running provider announces itself with a descriptor file that only the user ca
 ## In this repository
 
 - [`docs/pm.md`](docs/pm.md): the product model. Domains, Features, Requirements and how each is verified.
-- [`docs/spec/`](docs/spec/index.md): the protocol, draft 0.2.2. Operations, elements, locations, the MCP binding and discovery.
-- [`schema/`](schema/current-0.2.2.json): a JSON Schema for the answer to "what is open", and `tools/` with the checks that go with it.
-- [`docs/rfcs/`](docs/rfcs/README.md): how the protocol changes, and the accepted proposals behind 0.2.2.
+- [`docs/spec/`](docs/spec/index.md): the protocol, draft 0.2.3. Operations, elements, locations, the MCP binding and discovery.
+- [`schema/`](schema/current-0.2.3.json): a JSON Schema for the answer to "what is open", and `tools/` with the checks that go with it.
+- [`docs/rfcs/`](docs/rfcs/README.md): how the protocol changes, and the accepted proposals behind 0.2.3.
 - [`sdk/swift`](sdk/swift/README.md): a Swift package that makes a macOS app a provider. The app says what is open and selected; the package does the rest.

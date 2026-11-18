@@ -1,6 +1,6 @@
 # Ambient Context Protocol · Rules
 
-> Part of the [specification](index.md), version `0.2.2`.
+> Part of the [specification](index.md), version `0.2.3`.
 
 ## 9. Rules
 
@@ -16,6 +16,8 @@
 - **Keep ids meaningful.** An id refers to the element it was minted for, for as long as that thing exists and the app is running. An id for a text selection keeps referring to that passage after the user selects something else, and follows the passage through edits where it can. A provider does not reuse an id while it is running. When the thing is gone, answer `gone`.
 - **Say each state once.** `selected`, `focused`, `visible` and `hovered` are stated on the element they describe and nowhere else ([5.3](elements.md#53--states)).
 - **Expose what the user would expect.** The provider chooses what to report. It leaves out anything the user would be surprised to see handed to an agent, such as the contents of a password field or a private window. A tree does not change this: it is not a reason to report more of what is open than a list was ([5.7](elements.md#57--what-to-report)).
+- **Say when the answer is second-hand.** A provider that answers for another app ([section 8](discovery.md#8-discovery)) sets `via` among the root's attributes: a short lowercase word for how it learned what it reports. `browser-extension` is the value for a browser extension's helper. A host reads a value it does not know as "second-hand, by an unknown route".
+- **Keep a list of sites never read.** A provider that can report any site, such as a browser's, keeps a list of sites whose pages it does not read, which the user can see and change. For a listed site it may name the page and reports nothing in it, not even the selection. The list starts with the sites where people sign in and keep passwords.
 - **Name an author only where the app does.** The `author` attribute attaches a person's name to content. A provider sends it only where the app already shows it.
 - **Say no more in `display` than in the tree.** `display` ([4.3](operations.md#43--display)) labels the answer it is in. It holds no content the provider does not report as an element, and names nothing from an element the provider left out.
 - **Keep the token and answers out of logs.** A provider does not write its token, or anything from an answer, to a log.

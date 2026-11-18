@@ -1,6 +1,6 @@
 # Ambient Context Protocol · Elements
 
-> Part of the [specification](index.md), version `0.2.2`.
+> Part of the [specification](index.md), version `0.2.3`.
 
 ## 5. Elements
 
@@ -10,7 +10,7 @@ A notes-and-threads app with words selected inside a comment, and a second threa
 
 ```json
 {
-  "protocol": "0.2.2",
+  "protocol": "0.2.3",
   "instance": "k3f9x2",
   "root": {
     "id": "app", "role": "Application", "title": "Example",
@@ -151,12 +151,13 @@ A provider should keep `content` small: a selection's text, a thumbnail and not 
 
 `attributes` is an object of named values the app defines freely: line numbers, a due date, a status. A receiver ignores names it does not know.
 
-Two names are reserved:
+Three names are reserved:
 
 | Name | Value | Meaning |
 |---|---|---|
 | `author` | string | Who wrote the thing. A provider sends it only where the app already shows it. |
 | `related` | array | Links that are not containment. Each entry has a relation name and another element's `id` or an address. |
+| `via` | string | On the root only: how a provider that answers for another app learned what it reports, such as `browser-extension` ([9.1](security.md#91--for-providers)). |
 
 A link between two things that is not containment is expressed in `related`, not by placing one element inside the other.
 

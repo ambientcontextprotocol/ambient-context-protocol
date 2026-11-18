@@ -13,7 +13,7 @@ The answer to `current` has three required fields: `protocol`, the protocol vers
 
 ```json title="The answer to current: an editor with two files open and a sentence selected"
 {
-  "protocol": "0.2.2",
+  "protocol": "0.2.3",
   "instance": "k3f9x2",
   "root": {
     "id": "app",
@@ -138,9 +138,9 @@ None of this defends against a hostile program already running as the user: it c
 
 ## Versions
 
-The protocol version has three parts and is sent as a string: `0.2.2`. A provider gives the same value in the descriptor, in its extension declaration and in the answer to `current`. While the major version is 0, a host and a provider work together only if they agree on the major and minor parts; a new patch version only adds things a receiver may ignore. A host that does not support a provider's version treats the app as if it were not a provider. A receiver must not fail on a field, a `subrole` or an `attributes` name it does not recognize.
+The protocol version has three parts and is sent as a string: `0.2.3`. A provider gives the same value in the descriptor, in its extension declaration and in the answer to `current`. While the major version is 0, a host and a provider work together only if they agree on the major and minor parts; a new patch version only adds things a receiver may ignore. A host that does not support a provider's version treats the app as if it were not a provider. A receiver must not fail on a field, a `subrole` or an `attributes` name it does not recognize.
 
-Version `0.2.0` replaced the flat list and separate focus list of the first draft with the element tree. Version `0.2.1` added the optional `display` and the favicon an app may ship for hosts; a `0.2.0` host and a `0.2.1` provider work together unchanged. Version `0.2.2` added the optional `watch`: a host that is showing the user a provider's context may hold one request open, on which the provider says that its answer to `current` changed, and the host reads again. Hosts and providers of any `0.2` version still work together; without `watch`, a host reads when the user acts. The [versioning page](/specification/versioning) has the changelog, and the [RFCs](/rfcs) record why.
+Version `0.2.0` replaced the flat list and separate focus list of the first draft with the element tree. Version `0.2.1` added the optional `display` and the favicon an app may ship for hosts; a `0.2.0` host and a `0.2.1` provider work together unchanged. Version `0.2.2` added the optional `watch`: a host that is showing the user a provider's context may hold one request open, on which the provider says that its answer to `current` changed, and the host reads again. Hosts and providers of any `0.2` version still work together; without `watch`, a host reads when the user acts. Version `0.2.3` lets a helper that an app started answer for that app, such as a browser extension's helper: its descriptor carries `for`, and a host accepts it only when the app in front started it. The [versioning page](/specification/versioning) has the changelog, and the [RFCs](/rfcs) record why.
 
 ## What a host must do
 

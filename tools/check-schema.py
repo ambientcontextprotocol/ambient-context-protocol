@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check schema/current-0.2.2.json against the specification's own examples.
+"""Check schema/current-0.2.3.json against the specification's own examples.
 
 Every `current` answer shown in docs/spec and README.md must validate, and
 a set of wrong answers, a 0.1 answer among them, must not. The examples
@@ -15,7 +15,7 @@ import sys
 
 from jsonschema import Draft202012Validator
 
-schema = json.load(open("schema/current-0.2.2.json"))
+schema = json.load(open("schema/current-0.2.3.json"))
 Draft202012Validator.check_schema(schema)
 validator = Draft202012Validator(schema)
 

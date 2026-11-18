@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""An outside check for an Ambient Context Protocol provider, version 0.2.2.
+"""An outside check for an Ambient Context Protocol provider, version 0.2.3.
 
 Given a provider's descriptor file, or its endpoint and token, this script
 sends the provider requests and reports every requirement of docs/pm.md
@@ -43,7 +43,7 @@ import threading
 import time
 from urllib.parse import urlsplit
 
-PROTOCOL = "0.2.2"
+PROTOCOL = "0.2.3"
 MCP_VERSION = "2026-07-28"
 LEGACY_VERSION = "2025-11-25"
 EXTENSION = "io.github.ambientcontextprotocol/context"
@@ -787,10 +787,22 @@ def started_by(pid, parent):
         found = subprocess.run(["ps", "-o", "ppid=", "-p", str(pid)], capture_output=True, text=True, timeout=5)
         actual = int(found.stdout.strip())
     except (OSError, ValueError, subprocess.SubprocessError) as error:
-        return SKIP, "RFC-0004", "descriptor-for", "could not ask the system (%s)" % type(error).__name__
+        return SKIP, "PR-093", "descriptor-for", "could not ask the system (%s)" % type(error).__name__
     if actual != parent:
-        return FAIL, "RFC-0004", "descriptor-for", "the provider was not started by the process 'for' names"
-    return PASS, "RFC-0004", "descriptor-for", "the provider was started by the app it answers for"
+        return FAIL, "PR-093", "descriptor-for", "the provider was not started by the process 'for' names"
+    return PASS, "PR-093", "descriptor-for", "the provider was started by the app it answers for"
+
+
+def via_result(root):
+    """PR-096: the root of a provider that answers for another app says how
+    it learned what it reports."""
+    if not isinstance(root, dict):
+        return SKIP, "PR-096", "root-via", "no root to check"
+    attributes = root.get("attributes")
+    via = attributes.get("via") if isinstance(attributes, dict) else None
+    if isinstance(via, str) and via:
+        return PASS, "PR-096", "root-via", "the root says it is second-hand: %s" % printable(via)
+    return FAIL, "PR-096", "root-via", "the descriptor has 'for' and the root has no 'via' attribute"
 
 
 def check_descriptor_file(path, results):
@@ -825,8 +837,8 @@ def check_descriptor_file(path, results):
         problems.append("'started' is not a UTC time such as 2026-11-09T21:14:03Z")
     results.judge("PR-018", "descriptor-fields", problems, "the seven fields are present")
 
-    # A provider that answers for another app (RFC-0004, a draft) names
-    # that app in 'for', and its file after that app and then itself.
+    # A provider that answers for another app (RFC-0004) names that app
+    # in 'for', and its file after that app and then itself.
     target = descriptor.get("for")
     if target is not None:
         target_ok = (
@@ -834,9 +846,11 @@ def check_descriptor_file(path, results):
             and isinstance(target.get("pid"), int) and not isinstance(target.get("pid"), bool) and target["pid"] > 0
         )
         if not target_ok:
-            results.add(FAIL, "RFC-0004", "descriptor-for", "'for' is not an object with a string 'id' and a positive 'pid'")
+            results.add(FAIL, "PR-093", "descriptor-for", "'for' is not an object with a string 'id' and a positive 'pid'")
         elif not isinstance(pid, int):
-            results.add(SKIP, "RFC-0004", "descriptor-for", "pid is unusable")
+            results.add(SKIP, "PR-093", "descriptor-for", "pid is unusable")
+        elif target["pid"] == pid:
+            results.add(FAIL, "PR-093", "descriptor-for", "'for.pid' is the provider's own pid")
         else:
             expected = "%s.%d.for.%d.json" % (target["id"], target["pid"], pid)
             if os.path.basename(path) == expected:
@@ -913,7 +927,7 @@ def label(element, place):
 
 
 def check_tree(root):
-    """Checks a tree against section 5 and schema/current-0.2.2.json.
+    """Checks a tree against section 5 and schema/current-0.2.3.json.
 
     Returns a dict from check name to a list of problems, each naming
     elements by id or position only.
@@ -1226,7 +1240,7 @@ def check_reads(client, results, expected_instance, slow):
     watch = None
     if response.status != 200 or result is None:
         results.add(FAIL, "PR-026", "discover", response.describe())
-        results.add(SKIP, "PR-092", "discover-extension", "server/discover was not answered")
+        results.add(SKIP, "PR-098", "discover-extension", "server/discover was not answered")
     else:
         problems = complete(result)
         versions = result.get("supportedVersions")
@@ -1238,7 +1252,7 @@ def check_reads(client, results, expected_instance, slow):
         else:
             watch = capabilities["resources"].get("subscribe") is True
         results.judge("PR-026", "discover", problems, "names MCP %s and offers resources" % MCP_VERSION)
-        results.add(*extension_result(capabilities.get("extensions"), "PR-092", "discover-extension", "capabilities.extensions"))
+        results.add(*extension_result(capabilities.get("extensions"), "PR-098", "discover-extension", "capabilities.extensions"))
 
     response = client.rpc("resources/list")
     result = response.result()
@@ -1279,7 +1293,7 @@ def check_reads(client, results, expected_instance, slow):
     ]
     if not isinstance(answer, dict):
         reason = "no answer to check" if answer is None else "the answer is not an object"
-        for requirement, name in [("PR-072", "current-fields"), ("PR-092", "current-protocol"),
+        for requirement, name in [("PR-072", "current-fields"), ("PR-098", "current-protocol"),
                                   ("PR-040", "current-instance"), ("PR-074", "current-display")] + tree_checks + [("PR-004", "current-time")]:
             results.add(SKIP if answer is None else FAIL, requirement, name, reason)
         return None, locate, watch
@@ -1299,9 +1313,9 @@ def check_reads(client, results, expected_instance, slow):
         results.add(PASS, "PR-074", "current-display", "no display is sent, which is allowed")
 
     if answer.get("protocol") == PROTOCOL:
-        results.add(PASS, "PR-092", "current-protocol", PROTOCOL)
+        results.add(PASS, "PR-098", "current-protocol", PROTOCOL)
     else:
-        results.add(FAIL, "PR-092", "current-protocol", "expected %s, found %s" % (PROTOCOL, printable(answer.get("protocol"))))
+        results.add(FAIL, "PR-098", "current-protocol", "expected %s, found %s" % (PROTOCOL, printable(answer.get("protocol"))))
 
     instance = answer.get("instance")
     if not (isinstance(instance, str) and instance):
@@ -1614,7 +1628,7 @@ def check_older_clients(client, results):
     if response.status != 200 or result is None:
         results.add(WARN, "PR-026", "legacy-initialize",
                     "not answered (%s); a provider should serve older clients" % response.describe())
-        results.add(SKIP, "PR-092", "legacy-extension", "the initialize handshake is not offered")
+        results.add(SKIP, "PR-098", "legacy-extension", "the initialize handshake is not offered")
         results.add(SKIP, "PR-025", "legacy-read", "the initialize handshake is not offered")
         return
     if isinstance(result.get("protocolVersion"), str) and result["protocolVersion"]:
@@ -1622,7 +1636,7 @@ def check_older_clients(client, results):
     else:
         results.add(FAIL, "PR-026", "legacy-initialize", "the result names no protocolVersion")
     capabilities = result.get("capabilities") if isinstance(result.get("capabilities"), dict) else {}
-    results.add(*extension_result(capabilities.get("experimental"), "PR-092", "legacy-extension", "capabilities.experimental"))
+    results.add(*extension_result(capabilities.get("experimental"), "PR-098", "legacy-extension", "capabilities.experimental"))
 
     # With no knowledge of this protocol: list, then read, with nothing in
     # _meta. Only that both are answered; the answer itself is judged above.
@@ -1667,11 +1681,13 @@ def run(descriptor_path=None, endpoint=None, token=None, instance=None, pid=None
     test of this script shortens it.
     """
     results = Results()
+    answers_for = False
     if descriptor_path is not None:
         descriptor = check_descriptor_file(descriptor_path, results)
         if descriptor is None:
             return results
         endpoint, token, instance = descriptor.get("endpoint"), descriptor.get("token"), descriptor.get("instance")
+        answers_for = descriptor.get("for") is not None
         if not isinstance(instance, str):
             instance = None
     elif pid is not None:
@@ -1699,6 +1715,8 @@ def run(descriptor_path=None, endpoint=None, token=None, instance=None, pid=None
 
     check_refusals(client, results)
     root, locate, watch = check_reads(client, results, instance, slow)
+    if answers_for:
+        results.add(*via_result(root))
     check_locate(client, results, root, locate, locate_limit)
     check_watch(client, results, watch, watch_hold, watch_keepalive)
     check_older_clients(client, results)

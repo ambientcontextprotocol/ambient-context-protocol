@@ -236,6 +236,60 @@ class Faults(unittest.TestCase):
         self.assertIn("timed out", by_name(results)["read-current"]["detail"])
 
 
+class AnsweringForAnotherApp(unittest.TestCase):
+    """RFC-0004: a descriptor with 'for', judged without a running provider."""
+
+    def descriptor(self, folder, target_pid, pid=None, name=None):
+        pid = os.getpid() if pid is None else pid
+        fields = {
+            "protocol": check.PROTOCOL, "app": {"id": "org.example.helper", "name": "Helper", "version": "1.0"},
+            "pid": pid, "for": {"id": "org.example.browser", "pid": target_pid}, "instance": "i1",
+            "endpoint": "http://127.0.0.1:9/mcp", "token": "t", "started": "2026-11-18T12:00:00Z",
+        }
+        path = os.path.join(folder, name or "org.example.browser.%d.for.%d.json" % (target_pid, pid))
+        with open(path, "w") as handle:
+            json.dump(fields, handle)
+        os.chmod(path, 0o600)
+        return path
+
+    def judged(self, path):
+        results = check.Results()
+        check.check_descriptor_file(path, results)
+        return {(item["requirement"], item["name"]): item["status"] for item in results.items}
+
+    def setUp(self):
+        self.folder = tempfile.mkdtemp()
+        os.chmod(self.folder, 0o700)
+
+    def tearDown(self):
+        for name in os.listdir(self.folder):
+            os.remove(os.path.join(self.folder, name))
+        os.rmdir(self.folder)
+
+    def test_a_helper_started_by_the_app_it_names_passes(self):
+        judged = self.judged(self.descriptor(self.folder, os.getppid()))
+        self.assertEqual(judged[("PR-017", "descriptor-name")], "PASS")
+        self.assertEqual(judged[("PR-093", "descriptor-for")], "PASS")
+
+    def test_a_helper_another_process_started_fails(self):
+        judged = self.judged(self.descriptor(self.folder, 1))
+        self.assertEqual(judged[("PR-093", "descriptor-for")], "FAIL")
+
+    def test_a_helper_that_names_itself_fails(self):
+        judged = self.judged(self.descriptor(self.folder, os.getpid()))
+        self.assertEqual(judged[("PR-093", "descriptor-for")], "FAIL")
+
+    def test_a_file_named_for_the_app_alone_fails(self):
+        judged = self.judged(self.descriptor(self.folder, os.getppid(), name="org.example.helper.%d.json" % os.getpid()))
+        self.assertEqual(judged[("PR-017", "descriptor-name")], "FAIL")
+
+    def test_the_root_says_it_is_second_hand(self):
+        self.assertEqual(check.via_result({"id": "app", "attributes": {"via": "browser-extension"}})[0], check.PASS)
+        self.assertEqual(check.via_result({"id": "app", "attributes": {"via": ""}})[0], check.FAIL)
+        self.assertEqual(check.via_result({"id": "app"})[0], check.FAIL)
+        self.assertEqual(check.via_result(None)[0], check.SKIP)
+
+
 class Privacy(unittest.TestCase):
     def assert_private(self, text, token, instance=None):
         self.assertNotIn(token, text)
@@ -670,7 +724,7 @@ class CommandLine(unittest.TestCase):
             process.wait(timeout=10)
         self.assertEqual(done.returncode, 1)
         report = json.loads(done.stdout)
-        self.assertEqual(report["protocol"], "0.2.2")
+        self.assertEqual(report["protocol"], "0.2.3")
         self.assertEqual(report["summary"]["fail"], 2)
         failed = {(item["requirement"], item["name"]) for item in report["results"] if item["status"] == "FAIL"}
         self.assertEqual(failed, {("PR-053", "hovered-single"), ("PR-059", "ids-unique")})

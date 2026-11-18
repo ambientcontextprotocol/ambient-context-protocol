@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A fake Ambient Context Protocol provider, version 0.2.2.
+"""A fake Ambient Context Protocol provider, version 0.2.3.
 
 Serves one fixed, valid tree on a loopback port, writes a descriptor into
 the folder named by --directory and removes it on exit. It exists to test
@@ -40,7 +40,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-PROTOCOL = "0.2.2"
+PROTOCOL = "0.2.3"
 MCP_VERSION = "2026-07-28"
 LEGACY_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"]
 EXTENSION = "io.github.ambientcontextprotocol/context"
@@ -92,14 +92,14 @@ FAULTS = {
     "any-version-accepted": ("an unknown MCP version is served", "PR-026", ["unsupported-version"], "FAIL"),
     # Declaring and listing (sections 7.2 and 7.3).
     "no-discover-version": ("server/discover does not name MCP 2026-07-28", "PR-026", ["discover"], "FAIL"),
-    "no-extension": ("server/discover does not declare the extension", "PR-092", ["discover-extension"], "FAIL"),
-    "extension-version": ("server/discover declares the extension with version 0.1", "PR-092", ["discover-extension"], "FAIL"),
+    "no-extension": ("server/discover does not declare the extension", "PR-098", ["discover-extension"], "FAIL"),
+    "extension-version": ("server/discover declares the extension with version 0.1", "PR-098", ["discover-extension"], "FAIL"),
     "missing-current-resource": ("resources/list does not list ambient://current", "PR-024", ["resources-list"], "FAIL"),
     "two-contents": ("reading ambient://current returns two contents entries", "PR-024", ["read-current"], "FAIL"),
     "wrong-mime": ("the contents entry is text/plain", "PR-024", ["read-current"], "FAIL"),
     # The answer (sections 4.1 and 5).
     "extra-field": ("the answer has a fourth field, 'app'", "PR-072", ["current-fields"], "FAIL"),
-    "wrong-protocol": ("the answer's protocol is 0.1", "PR-092", ["current-protocol"], "FAIL"),
+    "wrong-protocol": ("the answer's protocol is 0.1", "PR-098", ["current-protocol"], "FAIL"),
     "display-not-object": ("the answer's display is a string", "PR-074", ["current-display"], "FAIL"),
     "display-title-number": ("display.title is a number", "PR-074", ["current-display"], "FAIL"),
     "display-two-lines": ("display.detail holds a line break", "PR-074", ["current-display"], "FAIL"),
@@ -122,7 +122,7 @@ FAULTS = {
     "locate-no-rects": ("a visible location has no rectangles", "PR-011", ["locate-issued"], "FAIL"),
     "locate-unknown-answered": ("an id never issued gets a location", "PR-060", ["locate-never-issued"], "FAIL"),
     # Older clients (sections 7.1 and 7.6).
-    "legacy-extension-misplaced": ("the initialize result declares the extension under capabilities.extensions", "PR-092", ["legacy-extension"], "FAIL"),
+    "legacy-extension-misplaced": ("the initialize result declares the extension under capabilities.extensions", "PR-098", ["legacy-extension"], "FAIL"),
     "legacy-read-refused": ("an older client's resources/read is refused", "PR-025", ["legacy-read"], "FAIL"),
     # Watching (section 4.4 and 7.7, RFC-0006).
     "watch-declared-not-served": ("subscribe is declared and subscriptions/listen is answered 404", "PR-080", ["watch-served"], "FAIL"),

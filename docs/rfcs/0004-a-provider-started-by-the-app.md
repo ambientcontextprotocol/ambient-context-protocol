@@ -5,9 +5,9 @@
 | Field | Value |
 |---|---|
 | Author | The Chrome provider session, for Andrew Jones; revised against `0.2.2` by the RFC-0004 session |
-| Status | Draft |
+| Status | Accepted |
 | Created | `2026.11.15` |
-| Decided | |
+| Decided | `2026.11.18` |
 | Discussion | Not yet opened as a pull request |
 | Specification sections | 7.1 (the server), 8 (discovery: the descriptor, host steps 2 to 4, what this defends against), 8.2 (the favicon), 9.1 (rules for providers), 10 (changelog), 12 (not in this version), 13 (open questions) |
 | Version effect | Additive: `0.2.2` to `0.2.3` |
@@ -110,7 +110,7 @@ A provider that answers for another app works only with hosts that implement thi
 
 **What a helper can reach.** A browser helper can report the page in front on any site the extension may read. A provider answers any program that can read its token, which for an editor exposes the document being edited and for a browser exposes far more. This RFC does not add a check on the caller (section 9, question 2). It narrows what is reachable instead: the never-read list in 9.1, private windows left out under the existing rule, and the existing host rule that the user sees and can remove what is collected before it is sent.
 
-**What the provider chooses to report.** Section 9.1 already says to leave out what the user would be surprised to see handed over. For a browser that includes private windows, password fields, text typed into forms, and any site on the never-read list. The Chrome provider's list starts with `accounts.google.com`, `1password.com`, `bitwarden.com` and `lastpass.com`; mail sites are read unless the user adds them (section 9, question 5).
+**What the provider chooses to report.** Section 9.1 already says to leave out what the user would be surprised to see handed over. For a browser that includes private windows, password fields, text typed into forms, and any site on the never-read list. The Chrome provider's list starts with sign-in, password-manager and mail sites (section 9, question 5); the user can change it on the options page.
 
 **Sensitive pages not on any list.** ACP issue #1 records an order confirmation page whose name, address and order number went with a message from Sirius without the user noticing. No list of sites would have caught it: the store is not a sign-in or mail site. The provider's list is a floor. The remedy for #1 is on the host's side, where 9.2 already requires that the user can see and remove what is collected, and where a warning before sending can be added; that is a host's business and not part of this RFC.
 
@@ -160,7 +160,7 @@ Before acceptance, each with the answer this revision proposes:
 2. *Whether the check on the caller can stay as it is for a provider that can report any site.* **Proposed:** yes for this RFC. The token stays the only check on the caller, as for every provider. What is reachable is narrowed instead by a never-read list a provider for any site must keep (9.1), on top of the existing rules on private windows and on the host showing what it collected. A rule on the caller, such as answering only hosts the user approved, is left to a later RFC and listed in section 13. Issue #1 is a host's matter (section 6) and does not wait on it.
 3. *Whether `via` should be required, and whether its values should be listed.* **Proposed:** required for a provider that answers for another app, and checked from outside when the check is run on the descriptor. Values are open: a short lowercase word, with `browser-extension` named in the specification. A host reads an unknown value as second-hand by an unknown route.
 4. *Whether the focus-path rule is the right way to choose among several helpers, or the provider should say which is in front.* **Proposed:** the focus-path rule, with a bound of the host's choosing on how many it reads. A helper cannot see another profile's windows, so it cannot say which is in front (section 8). Sirius implements the rule and reads at most 16.
-5. *Whether mail sites are on the Chrome provider's never-read list by default.* A question for the provider, not the protocol, recorded here because it bears on issue #1. Andrew settled it on 2026.11.15 ("honestly just think it should read gmail. i like the idea of a configurable never read list tho"); the list was cut to sign-in and password sites accordingly. **Proposed:** keep that.
+5. *Whether mail sites are on the Chrome provider's never-read list by default.* A question for the provider, not the protocol, recorded here because it bears on issue #1. On 2026.11.15 Andrew said "honestly just think it should read gmail. i like the idea of a configurable never read list tho", and the list was cut to sign-in and password sites. This revision proposed keeping that. **Decided otherwise** (section 10): mail sites are on the list by default.
 
 Can stay open during implementation:
 
@@ -169,4 +169,13 @@ Can stay open during implementation:
 
 ## 10. Decision and outcome
 
-Pending.
+Accepted on 2026.11.18 by Andrew Jones, maintainer, on the revision of commit `48e509d`, for protocol version `0.2.3`.
+
+Why: a browser is where people most often are, it cannot carry a provider in its own process, and the parent check admits only a helper the browser itself started. Each of his answers to the open questions was given in the RFC-0004 session on 2026.11.18, as a choice among stated options:
+
+- (2) Accepted with no new check on the caller. A provider that can report any site must keep a never-read list the user can change; a rule on the caller is left to a later RFC (section 13).
+- (3) `via` is required for a provider that answers for another app, with open values; `browser-extension` is named.
+- (4) The focus-path rule chooses among several helpers, with a bound of the host's choosing.
+- (5) Mail sites are not read by default: his answer was "Don't read mail by default", reversing his call of 2026.11.15. The Chrome provider's default list gains the mail hosts again, before this lands.
+
+Question 1 is answered for Chrome on macOS only; other Chromium browsers are untested and fail closed. Questions 6 and 7 stay open.

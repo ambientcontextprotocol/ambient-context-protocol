@@ -6,10 +6,18 @@ export const MAX_SELECTION = 20000;
 
 // Sites whose pages are never read, until the user says otherwise on the
 // options page. A site is its host name; a listed name covers the names
-// under it. Mail is not here: what is in a message is as often what the
-// user wants to ask about as anything else. What is here is where
-// passwords are.
-export const DEFAULT_NEVER = ["accounts.google.com", "1password.com", "bitwarden.com", "lastpass.com"];
+// under it. They are where people sign in, keep passwords and read mail.
+export const DEFAULT_NEVER = [
+  "accounts.google.com",
+  "1password.com",
+  "bitwarden.com",
+  "lastpass.com",
+  "mail.google.com",
+  "outlook.live.com",
+  "outlook.office.com",
+  "mail.proton.me",
+  "icloud.com",
+];
 
 export const DEFAULT_SETTINGS = { view: true, never: DEFAULT_NEVER };
 

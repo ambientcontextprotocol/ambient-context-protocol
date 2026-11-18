@@ -25,6 +25,13 @@ test("the list is read as typed, tidied", () => {
   assert.deepEqual(parseNever(DEFAULT_NEVER.join("\n")), DEFAULT_NEVER);
 });
 
+test("by default, sign-in, password and mail sites are never read", () => {
+  for (const url of ["https://accounts.google.com/", "https://my.1password.com/", "https://mail.google.com/mail/u/0/", "https://outlook.office.com/mail/", "https://mail.proton.me/u/0/inbox", "https://www.icloud.com/mail/"]) {
+    assert.equal(neverRead(url, DEFAULT_NEVER), true, url);
+  }
+  assert.equal(neverRead("https://www.google.com/search?q=x", DEFAULT_NEVER), false);
+});
+
 test("a page the browser refused, and one that was too slow", () => {
   assert.deepEqual(combine(undefined), { readable: false });
   assert.deepEqual(combine(null), { readable: true });

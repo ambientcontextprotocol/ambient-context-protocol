@@ -183,6 +183,12 @@ let server = ContextServer(
     // The extension says nothing when the page or the selection changes,
     // so this program cannot tell a watching host; it offers no watch.
     watch: false,
+    // A browser shows mail, banks and whatever the user is signed in to,
+    // and this program cannot tell such a page from any other, so every
+    // answer is marked sensitive and a host asks before sending it on
+    // (RFC-0007). The mark is not the redaction: what must never be
+    // reported is left out by the extension, before it gets here.
+    sensitive: { true },
     current: {
         let state = await bridge.current()
         return await pages.tree(state, browserActive: await Browser.isActive())

@@ -1,6 +1,6 @@
 # Ambient Context for Chrome
 
-> A provider of the [Ambient Context Protocol](../../docs/spec/index.md) for Chrome and other Chromium browsers: an extension and a small helper program that together tell a host which page is in front, what of it is in view and what text is selected on it. It depends on [RFC-0004](../../docs/rfcs/0004-a-provider-started-by-the-app.md), accepted for protocol version `0.2.3`.
+> A provider of the [Ambient Context Protocol](../../docs/spec/index.md) for Chrome and other Chromium browsers: an extension and a small helper program that together tell a host which page is in front, what of it is in view and what text is selected on it. It depends on [RFC-0004](../../docs/rfcs/0004-a-provider-started-by-the-app.md), accepted for protocol version `0.2.3`, and marks its answers sensitive as [RFC-0007](../../docs/rfcs/0007-sensitive-context.md) defines. It declares protocol version `0.2.4`.
 
 ## What it is
 
@@ -12,6 +12,8 @@ Chrome cannot be a provider by itself: nobody but its maker can add a listener t
 The helper names the app it answers for from its own parent process, so it holds nothing specific to one browser.
 
 ## What a host receives
+
+The answer to `current` carries `"protocol": "0.2.4"`, the instance, `"sensitive": true` and this tree as its `root`:
 
 ```json
 {
@@ -43,12 +45,24 @@ The helper names the app it answers for from its own parent process, so it holds
 - With a window the extension cannot see in front (Incognito, or another profile's), the answer is the application alone.
 - If the extension does not answer within 150 ms, the answer is the application alone with `state: "no-answer"`.
 - Positions are not reported, so there is no `locate`.
+- Every answer is marked `"sensitive": true`, with a page or without. A browser shows mail, banks and whatever the user is signed in to, and the helper cannot tell such a page from any other, so a host asks the user before sending the context to an agent, unless the user has told it not to ask for this browser. The app the host names is the browser, not the helper. A host from before `0.2.4` ignores the mark.
 
 ## What it reads, and when
 
 The extension asks for access to all sites, because a host's key is pressed outside Chrome, where Chrome's narrower "this tab, when clicked" permission never applies. It runs in a page only when a host asks. It reads the selection and what is inside the window; it reads nothing typed into a form field, nothing scrolled out of view, and no password box. Its options page has a switch for what is in view and a list of sites never to read, which starts with a few sign-in, password-manager and mail sites. It is not enabled in Incognito windows unless the user allows it there, and it reports nothing for one. Chrome still tells the extension about the last ordinary window when an Incognito one is in front, so the helper keeps track of whether a window the extension cannot see is the browser's front one, and then reports the application alone. For this the extension tells the helper when the keyboard moves between windows, and nothing else unasked. Nothing is stored, and nothing leaves the Mac from the extension or the helper; what a host does with the answer is the host's business.
 
 Any program on the Mac that can read the descriptor's token can ask the helper, as for every provider ([section 8](../../docs/spec/discovery.md)). For a browser that reaches further than for an editor, and it is not yet answered.
+
+## Redaction is this provider's job
+
+The protocol leaves redaction to the provider: no host is required to inspect, classify or clean an answer, and the `sensitive` mark asks only for the user's confirmation. What this provider does to keep private things out of what it reports is what the sections above state, and no more:
+
+- It reports nothing in a page on the user's never-read list, which starts with a few sign-in, password-manager and mail sites: the title and address only, with `read: "never"`.
+- It reads nothing typed into a form field and no password box.
+- It reads only the selection and what is inside the window, in the front window's active tab, cut to the limits above. Nothing scrolled out of view, no other tab and no image bytes; for what is in view, only the top page and not frames inside it.
+- It reports nothing for an Incognito window or one in another profile.
+
+It does not look for private details, such as a name, an address or an order number, in the text of a page it does read, and it masks none. A page off the never-read list is reported as it is shown. Until the extension does more, the mark on every answer and the user's own never-read list are what stand between such a page and an agent.
 
 ## Trying it
 
@@ -59,7 +73,7 @@ It is not on the Chrome Web Store. To run it from this folder:
 3. Register the helper with Chrome: `providers/chrome/register.sh`. This writes one file, `io.github.ambientcontextprotocol.chrome.json`, into Chrome's `NativeMessagingHosts` folder. `register.sh --remove` takes it away.
 4. Within half a minute a descriptor named `com.google.Chrome.<pid>.for.<pid>.json` appears in `~/Library/Application Support/AmbientContext/providers/`. Check it from outside with `python3 tools/conformance/check.py <that file>`.
 
-A host must implement RFC-0004 to use it.
+A host must implement RFC-0004 to use it, and RFC-0007 to ask before sending what it reads. After a change to the helper's source, build it again as in step 1 and restart Chrome, or switch the extension off and on at `chrome://extensions`, so that Chrome starts the new program; the registration in step 3 names the path and need not be repeated.
 
 ## Testing the helper alone
 
@@ -69,4 +83,4 @@ python3 providers/chrome/tools/fake_browser.py providers/chrome/helper/.build/de
 node --test providers/chrome/tests/*.test.mjs
 ```
 
-The second starts the helper as a browser would, answers its questions with one fixed page, and runs the outside check against it. The descriptor goes in a temporary folder. The third tests the extension: its plain functions, and the function that reads a page, run against a fixture in a headless Chrome with a temporary profile of its own.
+The second starts the helper as a browser would, answers its questions with one fixed page, runs the outside check against it and confirms that the answer is marked sensitive; add `--silent` for the answer given when the extension says nothing. The descriptor goes in a temporary folder. The third tests the extension: its plain functions, and the function that reads a page, run against a fixture in a headless Chrome with a temporary profile of its own.

@@ -5,7 +5,8 @@ Starts the helper as a browser would, with pipes on its standard input
 and output, and answers each question it asks with one fixed page. The
 descriptor goes in a temporary folder, never the real one. Prints the
 descriptor's path, then runs until interrupted or, with --check, runs the
-outside check against the helper and exits with its status.
+outside check against the helper, confirms the answer is marked sensitive
+(RFC-0007) and exits with the status of both.
 
     python3 providers/chrome/tools/fake_browser.py <path to helper> [--check] [--silent]
 
@@ -51,6 +52,20 @@ def serve(helper, silent):
         helper.stdin.flush()
 
 
+def marked_sensitive(path):
+    """Whether the helper's answer to current carries "sensitive": true."""
+    sys.dont_write_bytecode = True
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "tools", "conformance"))
+    import check
+
+    with open(path, encoding="utf-8") as handle:
+        descriptor = json.load(handle)
+    watch = check.Watch.from_descriptor(path)
+    client = check.Client(watch.host, watch.port, watch.path, descriptor["token"], 2.0)
+    document, problems = check.read_document(client.rpc("resources/read", {"uri": check.CURRENT_URI}), check.CURRENT_URI)
+    return not problems and document.get("sensitive") is True and document.get("protocol") == check.PROTOCOL
+
+
 def main():
     arguments = [a for a in sys.argv[1:] if not a.startswith("--")]
     if len(arguments) != 1:
@@ -78,6 +93,12 @@ def main():
         if "--check" in sys.argv:
             check = os.path.join(os.path.dirname(__file__), "..", "..", "..", "tools", "conformance", "check.py")
             status = subprocess.call([sys.executable, check, path])
+            # Every answer the helper gives is marked, with a page or without.
+            if marked_sensitive(path):
+                print("PASS  the answer is marked sensitive", flush=True)
+            else:
+                print("FAIL  the answer is not marked sensitive", flush=True)
+                status = 1
         else:
             helper.wait()
     except KeyboardInterrupt:

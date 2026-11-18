@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""An outside check for an Ambient Context Protocol provider, version 0.2.3.
+"""An outside check for an Ambient Context Protocol provider, version 0.2.4.
 
 Given a provider's descriptor file, or its endpoint and token, this script
 sends the provider requests and reports every requirement of docs/pm.md
@@ -43,7 +43,7 @@ import threading
 import time
 from urllib.parse import urlsplit
 
-PROTOCOL = "0.2.3"
+PROTOCOL = "0.2.4"
 MCP_VERSION = "2026-07-28"
 LEGACY_VERSION = "2025-11-25"
 EXTENSION = "io.github.ambientcontextprotocol/context"
@@ -927,7 +927,7 @@ def label(element, place):
 
 
 def check_tree(root):
-    """Checks a tree against section 5 and schema/current-0.2.3.json.
+    """Checks a tree against section 5 and schema/current-0.2.4.json.
 
     Returns a dict from check name to a list of problems, each naming
     elements by id or position only.
@@ -1240,7 +1240,7 @@ def check_reads(client, results, expected_instance, slow):
     watch = None
     if response.status != 200 or result is None:
         results.add(FAIL, "PR-026", "discover", response.describe())
-        results.add(SKIP, "PR-098", "discover-extension", "server/discover was not answered")
+        results.add(SKIP, "PR-106", "discover-extension", "server/discover was not answered")
     else:
         problems = complete(result)
         versions = result.get("supportedVersions")
@@ -1252,7 +1252,7 @@ def check_reads(client, results, expected_instance, slow):
         else:
             watch = capabilities["resources"].get("subscribe") is True
         results.judge("PR-026", "discover", problems, "names MCP %s and offers resources" % MCP_VERSION)
-        results.add(*extension_result(capabilities.get("extensions"), "PR-098", "discover-extension", "capabilities.extensions"))
+        results.add(*extension_result(capabilities.get("extensions"), "PR-106", "discover-extension", "capabilities.extensions"))
 
     response = client.rpc("resources/list")
     result = response.result()
@@ -1293,18 +1293,21 @@ def check_reads(client, results, expected_instance, slow):
     ]
     if not isinstance(answer, dict):
         reason = "no answer to check" if answer is None else "the answer is not an object"
-        for requirement, name in [("PR-072", "current-fields"), ("PR-098", "current-protocol"),
-                                  ("PR-040", "current-instance"), ("PR-074", "current-display")] + tree_checks + [("PR-004", "current-time")]:
+        for requirement, name in [("PR-099", "current-fields"), ("PR-106", "current-protocol"),
+                                  ("PR-040", "current-instance"), ("PR-074", "current-display"),
+                                  ("PR-100", "current-sensitive")] + tree_checks + [("PR-004", "current-time")]:
             results.add(SKIP if answer is None else FAIL, requirement, name, reason)
         return None, locate, watch
 
     keys = set(answer)
     problems = ["'%s' is missing" % name for name in ("protocol", "instance", "root") if name not in keys]
-    extra = len(keys - {"protocol", "instance", "root", "display"})
+    extra = len(keys - {"protocol", "instance", "root", "display", "sensitive"})
     if extra:
-        problems.append("%d extra field%s beside protocol, instance, root and display" % (extra, "" if extra == 1 else "s"))
-    results.judge("PR-072", "current-fields", problems, "protocol, instance and root%s, and nothing else"
-                  % (" with display" if "display" in keys else ""))
+        problems.append("%d extra field%s beside protocol, instance, root, display and sensitive"
+                        % (extra, "" if extra == 1 else "s"))
+    optional = [name for name in ("display", "sensitive") if name in keys]
+    results.judge("PR-099", "current-fields", problems, "protocol, instance and root%s, and nothing else"
+                  % (" with " + " and ".join(optional) if optional else ""))
 
     if "display" in answer:
         results.judge("PR-074", "current-display", display_problems(answer["display"]),
@@ -1312,10 +1315,21 @@ def check_reads(client, results, expected_instance, slow):
     else:
         results.add(PASS, "PR-074", "current-display", "no display is sent, which is allowed")
 
-    if answer.get("protocol") == PROTOCOL:
-        results.add(PASS, "PR-098", "current-protocol", PROTOCOL)
+    # A provider marks an answer only with the boolean true; it leaves the
+    # field out otherwise and never sends false to claim safety (RFC-0007).
+    if "sensitive" not in answer:
+        results.add(PASS, "PR-100", "current-sensitive", "no sensitive is sent, which is allowed")
+    elif answer["sensitive"] is True:
+        results.add(PASS, "PR-100", "current-sensitive", "sensitive is the boolean true")
+    elif answer["sensitive"] is False:
+        results.add(FAIL, "PR-100", "current-sensitive", "sensitive is false; a provider leaves the field out instead")
     else:
-        results.add(FAIL, "PR-098", "current-protocol", "expected %s, found %s" % (PROTOCOL, printable(answer.get("protocol"))))
+        results.add(FAIL, "PR-100", "current-sensitive", "sensitive is not a boolean")
+
+    if answer.get("protocol") == PROTOCOL:
+        results.add(PASS, "PR-106", "current-protocol", PROTOCOL)
+    else:
+        results.add(FAIL, "PR-106", "current-protocol", "expected %s, found %s" % (PROTOCOL, printable(answer.get("protocol"))))
 
     instance = answer.get("instance")
     if not (isinstance(instance, str) and instance):
@@ -1628,7 +1642,7 @@ def check_older_clients(client, results):
     if response.status != 200 or result is None:
         results.add(WARN, "PR-026", "legacy-initialize",
                     "not answered (%s); a provider should serve older clients" % response.describe())
-        results.add(SKIP, "PR-098", "legacy-extension", "the initialize handshake is not offered")
+        results.add(SKIP, "PR-106", "legacy-extension", "the initialize handshake is not offered")
         results.add(SKIP, "PR-025", "legacy-read", "the initialize handshake is not offered")
         return
     if isinstance(result.get("protocolVersion"), str) and result["protocolVersion"]:
@@ -1636,7 +1650,7 @@ def check_older_clients(client, results):
     else:
         results.add(FAIL, "PR-026", "legacy-initialize", "the result names no protocolVersion")
     capabilities = result.get("capabilities") if isinstance(result.get("capabilities"), dict) else {}
-    results.add(*extension_result(capabilities.get("experimental"), "PR-098", "legacy-extension", "capabilities.experimental"))
+    results.add(*extension_result(capabilities.get("experimental"), "PR-106", "legacy-extension", "capabilities.experimental"))
 
     # With no knowledge of this protocol: list, then read, with nothing in
     # _meta. Only that both are answered; the answer itself is judged above.

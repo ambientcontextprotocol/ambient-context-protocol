@@ -131,15 +131,15 @@ export function sections() {
 
 // What each page is for, where the page's own description does not say. The specification's pages all carry the same generated description, which tells a reader nothing about which one to open.
 const summaries: Record<string, string> = {
-  '/specification': 'Where to start: the contents of the specification, version 0.2.3, with its numbered sections.',
+  '/specification': 'Where to start: the contents of the specification, version 0.2.4, with its numbered sections.',
   '/specification/overview': 'Sections 1 to 3. The problem, one worked example of a request and its answer, and the roles and principles.',
-  '/specification/operations': 'Section 4. The operations: `current` and `locate`, the exact shape of each answer, the optional `display`, and `watch`, which tells a host when `current` changes.',
+  '/specification/operations': 'Section 4. The operations: `current` and `locate`, the exact shape of each answer, the optional `display` and `sensitive`, and `watch`, which tells a host when `current` changes.',
   '/specification/elements': 'Section 5. The element: its fields, the thirteen roles, the states, ids and instances, content, attributes and what to report.',
   '/specification/locations': 'Section 6. The answer to `locate`: states, rectangles, coordinates and hints.',
   '/specification/binding': 'Sections 7, 11 and 14. How it is carried over MCP: the server, declaring the extension, the two resources, errors and refusals, older clients, watching, and what a provider must implement.',
   '/specification/discovery': 'Section 8. The descriptor file, what a host does to find and check a provider, what that defends against, and the macOS platform profile.',
   '/specification/security': 'Section 9. The rules for providers and for hosts.',
-  '/specification/versioning': 'Sections 10, 12 and 13. Versioning, what is not in 0.2.3, the open questions and the changelog.',
+  '/specification/versioning': 'Sections 10, 12 and 13. Versioning, what is not in 0.2.4, the open questions and the changelog.',
   '/rfcs': 'Every RFC with its status and the version it was released in.',
   '/rfcs/process': 'What needs an RFC, and how one is written, reviewed, decided and released.',
 };

@@ -30,6 +30,12 @@ const notes: ContextProvider = {
   display(): ContextDisplay {
     return { title: "Groceries", detail: "1 word" };
   },
+  // A mail or banking app would answer true here, and a host would ask
+  // the user before sending its context on. Optional: left out or false,
+  // no `sensitive` field is sent.
+  sensitive(): boolean {
+    return false;
+  },
 };
 
 const directory = process.argv[2];

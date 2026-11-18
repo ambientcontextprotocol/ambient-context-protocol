@@ -1,6 +1,6 @@
 # Ambient Context for Swift
 
-Makes a macOS app a provider of the [Ambient Context Protocol](../../docs/spec/index.md), version 0.2.3: it runs the local server, answers the protocol's requests and keeps the descriptor file a host finds the app by. The app writes one thing, a description of what the user has open and selected.
+Makes a macOS app a provider of the [Ambient Context Protocol](../../docs/spec/index.md), version 0.2.4: it runs the local server, answers the protocol's requests and keeps the descriptor file a host finds the app by. The app writes one thing, a description of what the user has open and selected.
 
 It has no dependencies beyond Foundation and Network, and needs macOS 14 or later.
 
@@ -90,6 +90,20 @@ extension NotesContext {
 
 The picture is not sent. Ship it as a file in the app's bundle, `Contents/Resources/favicon.svg`, or `favicon.png` (at least 32 by 32 pixels) when there is no SVG. The host finds it there itself. Draw a simple shape in one light color: it is shown at about 16 points, often on a dark surface.
 
+## Say that it is sensitive (optional)
+
+An app that mostly shows private things, such as mail, messages or a bank's pages, can say so, and a host then asks the user before sending that context to an agent ([RFC-0007](../../docs/rfcs/0007-sensitive-context.md)). One more function:
+
+```swift
+extension MailContext {
+    func sensitive() -> Bool { true }
+}
+```
+
+When it answers true, the answer to `current` carries `"sensitive": true`. When it answers false, or the function is left out, the field is not sent: the package never sends `false`, because no mark does not mean safe. It is called on the main actor with `current()` and describes the same tree, so an app can mark some views and not others. With a `ContextResponder`, or a `ContextServer` that answers for another app, pass `sensitive:` as a closure.
+
+Marking is not redacting. Removing or masking private details inside what `current()` reports is the provider's job: the app knows which of its content is private, and it reports only what should leave it. No host is required to inspect or clean an answer, and a host written before 0.2.4 ignores the mark, so what should never be reported is still left out of the tree.
+
 ## Say when it changes (optional)
 
 A host that shows the user what it read is showing a moment: when the user selects something else, its line is stale until it reads again. A host may therefore watch a provider, and the provider tells it, with no content, that the answer to `current` changed. `ContextServer` offers this by itself. The app's part is one call, made wherever its selection, focus, open documents or their titles change:
@@ -162,9 +176,12 @@ let server = ContextServer(
     app: ContextApp(id: "org.example.helper", name: "Helper", version: "1.0"),
     answersFor: ContextTarget(id: "com.google.Chrome", pid: getppid()),
     watch: false,
+    sensitive: { true },
     current: { await askTheBrowser() }
 )
 ```
+
+`sensitive:` is optional and means what it does for an app's own provider; the app a host names to the user is the app answered for.
 
 The descriptor is written as `<app-id>.<app-pid>.for.<pid>.json`. A host accepts it only if the app in front started this process. `providers/chrome` is a complete example.
 

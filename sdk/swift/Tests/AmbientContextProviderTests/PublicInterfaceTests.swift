@@ -104,7 +104,7 @@ struct PublicInterfaceTests {
 
         let current = try document(try await call(descriptor, "resources/read", uri: "ambient://current"))
         #expect(current["instance"] as? String == descriptor.instance)
-        #expect(current["protocol"] as? String == "0.2.3")
+        #expect(current["protocol"] as? String == "0.2.4")
         let root = try #require(current["root"] as? [String: Any])
         #expect(root["title"] as? String == "Notes")
         #expect((root["children"] as? [[String: Any]])?.first?["title"] as? String == "Groceries")
@@ -145,6 +145,33 @@ struct PublicInterfaceTests {
         defer { server.stop() }
         let current = try document(try await call(descriptor, "resources/read", uri: "ambient://current"))
         #expect(Set(current.keys) == ["protocol", "instance", "root"])
+    }
+
+    @MainActor
+    final class Mail: ContextProvider {
+        var isPrivate = true
+
+        func current() -> ContextElement {
+            ContextElement(id: "app", role: .application, title: "Mail", children: [
+                ContextElement(id: "m-1", role: .document, subrole: "message", title: "Re: Lease", focused: true),
+            ])
+        }
+
+        func sensitive() -> Bool { isPrivate }
+    }
+
+    @Test
+    func aProviderThatSaysItsContextIsSensitive() async throws {
+        let mail = Mail()
+        let (server, descriptor, _) = try await started(mail)
+        defer { server.stop() }
+        let current = try document(try await call(descriptor, "resources/read", uri: "ambient://current"))
+        #expect(current["sensitive"] as? Bool == true)
+        #expect(Set(current.keys) == ["protocol", "instance", "root", "sensitive"])
+
+        mail.isPrivate = false
+        let unmarked = try document(try await call(descriptor, "resources/read", uri: "ambient://current"))
+        #expect(unmarked["sensitive"] == nil)
     }
 
     @Test
@@ -257,7 +284,7 @@ struct PublicInterfaceTests {
         let target = ContextTarget(id: "org.example.browser", pid: getppid())
         let server = ContextServer(
             app: ContextApp(id: "org.example.helper", name: "Helper", version: "1.0"),
-            answersFor: target, directory: directory, watch: watch,
+            answersFor: target, directory: directory, watch: watch, sensitive: { true },
             current: {
                 ContextElement(id: "app", role: .application, title: "Browser", attributes: ["via": "browser-extension"])
             }
@@ -273,6 +300,8 @@ struct PublicInterfaceTests {
 
         let current = try document(try await call(descriptor, "resources/read", uri: "ambient://current"))
         let root = try #require(current["root"] as? [String: Any])
+        // A helper's mark means what an app's own does (RFC-0007).
+        #expect(current["sensitive"] as? Bool == true)
         #expect((root["attributes"] as? [String: Any])?["via"] as? String == "browser-extension")
 
         let discover = try #require(try await call(descriptor, "server/discover")["result"] as? [String: Any])

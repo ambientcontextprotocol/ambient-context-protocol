@@ -9,7 +9,7 @@ import type { ContextContent, ContextDisplay, ContextElement, ContextLocation, C
 import { ContextTree } from "./tree.ts";
 import type { ContextIssue } from "./tree.ts";
 
-// A provider for the Ambient Context Protocol, version 0.2.3: a small MCP
+// A provider for the Ambient Context Protocol, version 0.2.4: a small MCP
 // server on the loopback interface that answers `current` and `locate`
 // as two resources, and the descriptor file that tells a host where it
 // is. It is handed a `ContextProvider` and knows nothing else about the
@@ -257,11 +257,17 @@ function encodeLocation(location: ContextLocation): unknown {
   };
 }
 
-/** The JSON document `ambient://current` holds. */
-function encodeCurrent(instance: string, root: ContextElement, display: ContextDisplay | null | undefined, hovered = true): string {
+/**
+ * The JSON document `ambient://current` holds. `sensitive` is written as
+ * `true` or left out, never as `false` (RFC-0007).
+ */
+function encodeCurrent(
+  instance: string, root: ContextElement, display: ContextDisplay | null | undefined, sensitive: unknown, hovered = true,
+): string {
   return sortedJSON({
     protocol: ContextResponder.protocolVersion,
     instance,
+    sensitive: sensitive === true ? true : undefined,
     display: encodeDisplay(display),
     root: encodeElement(root, hovered),
   });
@@ -273,8 +279,8 @@ function encodeCurrent(instance: string, root: ContextElement, display: ContextD
  * since a change in `hovered` alone is not a change (RFC-0006). A digest,
  * so that nothing from the app is kept between requests.
  */
-function comparableCurrent(instance: string, root: ContextElement, display: ContextDisplay | null | undefined): string {
-  return createHash("sha256").update(encodeCurrent(instance, root, display, false), "utf8").digest("base64");
+function comparableCurrent(instance: string, root: ContextElement, display: ContextDisplay | null | undefined, sensitive: unknown): string {
+  return createHash("sha256").update(encodeCurrent(instance, root, display, sensitive, false), "utf8").digest("base64");
 }
 
 const metaVersion = "io.modelcontextprotocol/protocolVersion";
@@ -293,6 +299,12 @@ export interface ContextResponderOptions {
    * nothing, leaves the wording to the host.
    */
   display?: (() => ContextDisplay | null | undefined | Promise<ContextDisplay | null | undefined>) | undefined;
+  /**
+   * Whether what `current` holds is likely private (RFC-0007). The answer
+   * carries `"sensitive": true` when it answers exactly `true` and no
+   * such field otherwise. Absent never marks it.
+   */
+  sensitive?: (() => boolean | null | undefined | Promise<boolean | null | undefined>) | undefined;
   /**
    * Absent for a provider that does not report positions: the location
    * template is then not offered and no location can be read.
@@ -329,7 +341,7 @@ export interface ContextResponderOptions {
  * belongs in a log.
  */
 export class ContextResponder {
-  static readonly protocolVersion = "0.2.3";
+  static readonly protocolVersion = "0.2.4";
   static readonly extensionID = "io.github.ambientcontextprotocol/context";
   /** The path used when none is given. */
   static readonly endpointPath = "/mcp";
@@ -346,6 +358,7 @@ export class ContextResponder {
   token: string;
   current: ContextResponderOptions["current"];
   display: ContextResponderOptions["display"];
+  sensitive: ContextResponderOptions["sensitive"];
   locate: ContextResponderOptions["locate"];
   path: string;
   check: "warn" | "refuse" | "off";
@@ -358,6 +371,7 @@ export class ContextResponder {
     this.token = options.token;
     this.current = options.current;
     this.display = options.display;
+    this.sensitive = options.sensitive;
     this.locate = options.locate;
     this.path = options.path ?? ContextResponder.endpointPath;
     if (!this.path.startsWith("/") || this.path.includes("?") || this.path.includes("#")) {
@@ -509,10 +523,11 @@ export class ContextResponder {
     if (uri === ContextResponder.currentURI) {
       const root = await this.current();
       const display = this.display ? await this.display() : undefined;
+      const sensitive = this.sensitive ? await this.sensitive() : undefined;
       this.#inspect(root);
-      const text = encodeCurrent(this.instance, root, display);
+      const text = encodeCurrent(this.instance, root, display, sensitive);
       // A watch is owed a notice only when the answer differs from this one.
-      watchesOf.get(this)?.remember(comparableCurrent(this.instance, root, display));
+      watchesOf.get(this)?.remember(comparableCurrent(this.instance, root, display, sensitive));
       return text;
     }
     if (!this.locate || !uri.startsWith(ContextResponder.locationPrefix)) return undefined;
@@ -1092,6 +1107,7 @@ export class ContextServer {
       app: this.#app, instance, token,
       current: () => provider.current(),
       display: typeof provider.display === "function" ? () => provider.display?.() : undefined,
+      sensitive: typeof provider.sensitive === "function" ? () => provider.sensitive?.() : undefined,
       locate,
       ...(this.#check ? { check: this.#check } : {}),
       ...(this.#report ? { report: this.#report } : {}),
@@ -1101,7 +1117,8 @@ export class ContextServer {
     const watches = new ContextWatches(async () => {
       const root = await responder.current();
       const display = responder.display ? await responder.display() : undefined;
-      return comparableCurrent(responder.instance, root, display);
+      const sensitive = responder.sensitive ? await responder.sensitive() : undefined;
+      return comparableCurrent(responder.instance, root, display, sensitive);
     }, this.#coalesceInterval, this.#keepAliveInterval);
     watchesOf.set(responder, watches);
     this.#watches = watches;

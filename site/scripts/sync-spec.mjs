@@ -97,7 +97,7 @@ function load(src,{ section, slug, title: fixedTitle }) {
     return { start, end, lines: body.slice(start, end) };
   };
 
-  // The specification index opens with its version line: "Version `0.2.3` · Draft of ...".
+  // The specification index opens with its version line: "Version `0.2.4` · Draft of ...".
   if (section === 'specification' && slug === 'index') {
     const block = firstBlock();
     const version = block?.lines.join(' ').match(/^Version `([^`]+)`/);

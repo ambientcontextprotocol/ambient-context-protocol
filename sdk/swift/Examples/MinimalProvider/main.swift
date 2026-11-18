@@ -34,6 +34,11 @@ final class Notes: ContextProvider {
     func display() -> ContextDisplay? {
         ContextDisplay(title: "Groceries", detail: "1 word")
     }
+
+    // A mail or banking app would answer true here, and a host would ask
+    // the user before sending its context on. Optional: the default is
+    // false, and then no `sensitive` field is sent.
+    func sensitive() -> Bool { false }
 }
 
 let notes = Notes()

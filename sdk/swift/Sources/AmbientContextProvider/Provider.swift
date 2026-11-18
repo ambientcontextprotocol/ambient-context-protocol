@@ -1,6 +1,6 @@
 import Foundation
 
-// The Ambient Context Protocol's types, version 0.2.3 (RFC-0001, the
+// The Ambient Context Protocol's types, version 0.2.4 (RFC-0001, the
 // element model; RFC-0003, the hovered state; RFC-0005, display), and the interface an app
 // implements to be a provider: `ContextProvider` to say what the user
 // has open and selected, and `ContextLocator` as well if it can also say
@@ -339,10 +339,21 @@ public protocol ContextProvider: AnyObject, Sendable {
     /// with nothing in between, so the two describe the same moment.
     /// Optional: the default is nil.
     func display() -> ContextDisplay?
+
+    /// True when what `current()` holds is likely private to the user or
+    /// to someone else, so that a host asks the user before sending it
+    /// on (RFC-0007). Called on the main actor with `current()`, so it
+    /// describes the same tree. Sent as `"sensitive": true` when true and
+    /// left out otherwise, never sent as `false`. It asks for the user's
+    /// confirmation and nothing more: leaving out or masking private
+    /// details in the tree is still this provider's job, not the host's.
+    /// Optional: the default is false.
+    func sensitive() -> Bool
 }
 
 extension ContextProvider {
     public func display() -> ContextDisplay? { nil }
+    public func sensitive() -> Bool { false }
 }
 
 /// A provider that can also say where an element is on screen. Optional:

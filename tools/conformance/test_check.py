@@ -71,6 +71,13 @@ def not_passing(results):
     return {item["name"]: item["status"] for item in results.items if item["status"] != check.PASS}
 
 
+def served(provider):
+    """The answer to current as a host would read it."""
+    client = check.Client("127.0.0.1", provider.port, provider.path, provider.token, 2.0)
+    document, _problems = check.read_document(client.rpc("resources/read", {"uri": check.CURRENT_URI}), check.CURRENT_URI)
+    return document
+
+
 def quick(**arguments):
     """The check with the watch not held open, which is what most tests need."""
     return check.run(watch_hold=0, **arguments)
@@ -168,6 +175,39 @@ class CleanProvider(unittest.TestCase):
             results = quick(descriptor_path=provider.descriptor)
         self.assertEqual(not_passing(results), UNHELD)
         self.assertIn("no display", by_name(results)["current-display"]["detail"])
+
+    def test_without_sensitive_the_field_is_absent_and_passes(self):
+        with Running() as provider:
+            self.assertNotIn("sensitive", served(provider))
+            results = quick(descriptor_path=provider.descriptor)
+        self.assertIn("no sensitive", by_name(results)["current-sensitive"]["detail"])
+        self.assertEqual(by_name(results)["current-sensitive"]["requirement"], "PR-100")
+
+    def test_a_sensitive_answer_passes_every_check(self):
+        with Running(sensitive=True) as provider:
+            self.assertIs(served(provider)["sensitive"], True)
+            results = quick(descriptor_path=provider.descriptor)
+        self.assertEqual(not_passing(results), UNHELD)
+        self.assertIn("boolean true", by_name(results)["current-sensitive"]["detail"])
+        self.assertIn("sensitive", by_name(results)["current-fields"]["detail"])
+
+    def test_sensitive_is_refused_unless_it_is_true(self):
+        for fault, word in [("sensitive-false", "false"), ("sensitive-string", "not a boolean")]:
+            with self.subTest(fault=fault), Running(faults=[fault]) as provider:
+                results = quick(descriptor_path=provider.descriptor)
+                found = by_name(results)
+                self.assertEqual(found["current-sensitive"]["status"], check.FAIL)
+                self.assertIn(word, found["current-sensitive"]["detail"])
+                # The field itself is allowed; only its value is wrong.
+                self.assertEqual(found["current-fields"]["status"], check.PASS)
+
+    def test_another_unknown_field_is_still_refused(self):
+        with Running(sensitive=True, faults=["extra-field"]) as provider:
+            results = quick(descriptor_path=provider.descriptor)
+        found = by_name(results)
+        self.assertEqual(found["current-fields"]["status"], check.FAIL)
+        self.assertEqual(found["current-fields"]["requirement"], "PR-099")
+        self.assertEqual(found["current-sensitive"]["status"], check.PASS)
 
     def test_a_display_problem_names_the_field_and_never_quotes_it(self):
         with Running(faults=["display-two-lines"]) as provider:
@@ -724,7 +764,7 @@ class CommandLine(unittest.TestCase):
             process.wait(timeout=10)
         self.assertEqual(done.returncode, 1)
         report = json.loads(done.stdout)
-        self.assertEqual(report["protocol"], "0.2.3")
+        self.assertEqual(report["protocol"], "0.2.4")
         self.assertEqual(report["summary"]["fail"], 2)
         failed = {(item["requirement"], item["name"]) for item in report["results"] if item["status"] == "FAIL"}
         self.assertEqual(failed, {("PR-053", "hovered-single"), ("PR-059", "ids-unique")})

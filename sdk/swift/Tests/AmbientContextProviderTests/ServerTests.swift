@@ -164,7 +164,7 @@ struct ContextServerTests {
         let capabilities = try #require(result["capabilities"] as? [String: Any])
         #expect(capabilities["resources"] is [String: Any])
         let extensions = try #require(capabilities["extensions"] as? [String: [String: String]])
-        #expect(extensions["io.github.ambientcontextprotocol/context"] == ["version": "0.2.3"])
+        #expect(extensions["io.github.ambientcontextprotocol/context"] == ["version": "0.2.4"])
         let meta = try #require(result["_meta"] as? [String: [String: String]])
         #expect(meta["io.modelcontextprotocol/serverInfo"] == ["name": "Editor", "version": "2.3.0"])
     }
@@ -187,7 +187,7 @@ struct ContextServerTests {
         let current = try document(await responder.respond(to: request("resources/read", params: ["uri": uri])), uri: uri)
         // These three and no display: this provider words nothing.
         #expect(Set(current.keys) == ["protocol", "instance", "root"])
-        #expect(current["protocol"] as? String == "0.2.3")
+        #expect(current["protocol"] as? String == "0.2.4")
         #expect(current["instance"] as? String == "k3f9x2")
 
         let root = try #require(current["root"] as? [String: Any])
@@ -292,6 +292,36 @@ struct ContextServerTests {
         )
         let response = await strict.respond(to: request("resources/read", params: ["uri": "ambient://current"]))
         #expect((try json(response)["error"] as? [String: Any])?["code"] as? Int == -32602)
+    }
+
+    // MARK: - Sensitive (RFC-0007)
+
+    private func marked(_ sensitive: (@Sendable () async -> Bool)?) async throws -> [String: Any] {
+        let responder = ContextResponder(
+            app: .init(id: "org.example.editor", name: "Editor", version: "2.3.0"), instance: "k3f9x2",
+            token: Self.token, current: { Self.tree }, sensitive: sensitive
+        )
+        let uri = "ambient://current"
+        return try document(await responder.respond(to: request("resources/read", params: ["uri": uri])), uri: uri)
+    }
+
+    @Test
+    func sensitiveIsSentAsTrueWhenSet() async throws {
+        let current = try await marked { true }
+        #expect(Set(current.keys) == ["protocol", "instance", "root", "sensitive"])
+        #expect(current["sensitive"] as? Bool == true)
+    }
+
+    @Test
+    func sensitiveIsAbsentWhenNotSet() async throws {
+        #expect(try await marked(nil)["sensitive"] == nil)
+    }
+
+    @Test
+    func sensitiveIsNeverSentAsFalse() async throws {
+        let current = try await marked { false }
+        #expect(current["sensitive"] == nil)
+        #expect(Set(current.keys) == ["protocol", "instance", "root"])
     }
 
     // MARK: - Display (RFC-0005)
@@ -627,7 +657,7 @@ struct ContextServerTests {
 
     private func descriptor(pid: Int32) -> ContextDescriptor {
         ContextDescriptor(
-            protocol: "0.2.3", app: .init(id: "org.example.editor", name: "Editor", version: "2.3.0"),
+            protocol: "0.2.4", app: .init(id: "org.example.editor", name: "Editor", version: "2.3.0"),
             pid: pid, instance: "k3f9x2", endpoint: "http://127.0.0.1:53124/mcp", token: "secret",
             started: "2026-11-09T21:14:03Z"
         )
@@ -648,7 +678,7 @@ struct ContextServerTests {
 
         let written = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
         #expect(Set(written.keys) == ["protocol", "app", "pid", "instance", "endpoint", "token", "started"])
-        #expect(written["protocol"] as? String == "0.2.3")
+        #expect(written["protocol"] as? String == "0.2.4")
         #expect(written["pid"] as? Int == 48211)
         #expect(written["endpoint"] as? String == "http://127.0.0.1:53124/mcp")
         #expect(written["app"] as? [String: String] == ["id": "org.example.editor", "name": "Editor", "version": "2.3.0"])

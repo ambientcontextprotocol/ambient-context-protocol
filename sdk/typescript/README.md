@@ -1,8 +1,8 @@
 # Ambient Context for TypeScript
 
-Makes a desktop app built on Node, such as an Electron app, a provider of the Ambient Context Protocol, version 0.2.3: it runs the local server, answers the protocol's requests and keeps the descriptor file a host finds the app by. The app writes one thing, a tree of what the user has open and selected.
+Makes a desktop app built on Node, such as an Electron app, a provider of the Ambient Context Protocol, version 0.2.4: it runs the local server, answers the protocol's requests and keeps the descriptor file a host finds the app by. The app writes one thing, a tree of what the user has open and selected.
 
-Version 0.2.3 is defined by six accepted proposals until the specification is rewritten to match: [the element model](../../docs/rfcs/0001-element-model.md), [the shared listener](../../docs/rfcs/0002-shared-listener.md), [the hovered state](../../docs/rfcs/0003-hovered-state.md), [display and the favicon](../../docs/rfcs/0005-display-and-favicon.md) [watching](../../docs/rfcs/0006-watching.md) and [a provider started by the app it answers for](../../docs/rfcs/0004-a-provider-started-by-the-app.md). Discovery, transport and trust are otherwise unchanged from [the 0.1 specification](../../docs/protocol-v0.md), sections 7 and 8.
+Version 0.2.4 is defined by seven accepted proposals until the specification is rewritten to match: [the element model](../../docs/rfcs/0001-element-model.md), [the shared listener](../../docs/rfcs/0002-shared-listener.md), [the hovered state](../../docs/rfcs/0003-hovered-state.md), [display and the favicon](../../docs/rfcs/0005-display-and-favicon.md) [watching](../../docs/rfcs/0006-watching.md), [a provider started by the app it answers for](../../docs/rfcs/0004-a-provider-started-by-the-app.md) and [sensitive context](../../docs/rfcs/0007-sensitive-context.md). Discovery, transport and trust are otherwise unchanged from [the 0.1 specification](../../docs/protocol-v0.md), sections 7 and 8.
 
 It uses Node's standard library only and has no dependencies. It is plain TypeScript with no build step: Node 22.18 or later runs the source directly, and a bundler takes it as it is. Like the protocol's discovery, it is for macOS. It began as a port of the [Swift package](../swift/README.md), name for name; that package is still at 0.1, so the two differ until it is carried over.
 
@@ -165,6 +165,23 @@ const notesContext: ContextProvider = {
 `title` is what is open and `detail` is what is selected or in focus within it. Both are plain text; the package puts each on one line and cuts it at 80 characters, and sends nothing when there is no `title`. `display()` is called straight after `current()` and must describe the same tree: it names nothing the tree does not hold. Return nothing to let the host word the line.
 
 The picture is not sent. Ship it as a file in the app, `Contents/Resources/favicon.svg` in the bundle on macOS, or `favicon.png` (at least 32 by 32 pixels) when there is no SVG. The host finds it there itself. Draw a simple shape in one light color: it is shown at about 16 points, often on a dark surface. In an Electron app, add the file to the packager's extra resources so that it lands directly in `Contents/Resources`.
+
+## Say that it is sensitive (optional)
+
+An app that mostly shows private things, such as mail, messages or a bank's pages, can say so, and a host then asks the user before sending that context to an agent ([RFC-0007](../../docs/rfcs/0007-sensitive-context.md)). One more function:
+
+```ts
+const mailContext: ContextProvider = {
+  current() { /* the tree */ },
+  sensitive() {
+    return true;
+  },
+};
+```
+
+When it answers `true`, the answer to `current` carries `"sensitive": true`. When it answers anything else, or the function is left out, the field is not sent: the package never sends `false`, because no mark does not mean safe. It is called straight after `current()` and describes the same tree, so an app can mark some views and not others. With a `ContextResponder`, pass `sensitive` beside `current`. A helper that answers for another app marks its answer the same way.
+
+Marking is not redacting. Removing or masking private details inside what `current()` reports is the provider's job: the app knows which of its content is private, and it reports only what should leave it. No host is required to inspect or clean an answer, and a host written before 0.2.4 ignores the mark, so what should never be reported is still left out of the tree.
 
 ## Say when it changes (optional)
 

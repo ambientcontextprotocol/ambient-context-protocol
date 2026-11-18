@@ -16,7 +16,7 @@ import type { ContextElement, ContextHTTPRequest, ContextProvider, ContextValue 
 // The package as an app uses it: only the public interface, over a real
 // socket, found through the descriptor file as a host finds it. Ported
 // from the Swift package's `PublicInterfaceTests.swift` at draft 0.1 and
-// carried to version 0.2.3; the tests after the first three are this
+// carried to version 0.2.4; the tests after the first three are this
 // package's own.
 
 type JSONObject = Record<string, any>;
@@ -139,7 +139,7 @@ test("aProviderThatOnlySaysWhatIsOpen", async (t) => {
 
   const current = documentOf(await call(descriptor, "resources/read", "ambient://current"));
   assert.equal(current["instance"], descriptor.instance);
-  assert.equal(current["protocol"], "0.2.3");
+  assert.equal(current["protocol"], "0.2.4");
   assert.equal(current["root"].role, "Application");
   assert.equal(current["root"].children[0].children[0].title, "Groceries");
   assert.deepEqual(ContextTree.check(current["root"]), []);
@@ -166,6 +166,18 @@ test("aProviderThatWordsItsOwnLine", async (t) => {
   assert.deepEqual(Object.keys(without).sort(), ["instance", "protocol", "root"]);
 });
 
+test("aProviderThatSaysItsContextIsSensitive", async (t) => {
+  const mail: ContextProvider = { ...notes, sensitive: () => true };
+  const { descriptor } = await started(t, mail);
+  const current = documentOf(await call(descriptor, "resources/read", "ambient://current"));
+  assert.equal(current["sensitive"], true);
+  assert.deepEqual(Object.keys(current).sort(), ["instance", "protocol", "root", "sensitive"]);
+
+  const unmarked = await started(t, { ...notes, sensitive: () => false });
+  const without = documentOf(await call(unmarked.descriptor, "resources/read", "ambient://current"));
+  assert.equal("sensitive" in without, false);
+});
+
 test("aProviderThatAlsoSaysWhere", async (t) => {
   const { server, descriptor } = await started(t, locatedNotes);
   const templates = await call(descriptor, "resources/templates/list");
@@ -185,7 +197,7 @@ test("theDescriptorNamesALoopbackListenerThatIsAlreadyUp", async (t) => {
   assert.equal(server.endpoint?.href, descriptor.endpoint);
   assert.equal(server.token, descriptor.token);
   assert.equal(server.instance, descriptor.instance);
-  assert.equal(descriptor.protocol, "0.2.3");
+  assert.equal(descriptor.protocol, "0.2.4");
   assert.match(descriptor.started, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
   assert.equal(statSync(directory).mode & 0o777, 0o700);
   assert.equal(statSync(file).mode & 0o777, 0o600);

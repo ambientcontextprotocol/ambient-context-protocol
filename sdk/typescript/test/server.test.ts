@@ -14,7 +14,7 @@ import type { ContextIssue } from "../src/tree.ts";
 // The provider's server, without a socket: bytes to a request, a request
 // to a response, and the descriptor file. Ported from the Swift package's
 // `ServerTests.swift` at draft 0.1, test for test and under the same
-// names, then carried to version 0.2.3: `current` answers with a tree.
+// names, then carried to version 0.2.4: `current` answers with a tree.
 
 // MARK: - Fixtures
 
@@ -191,7 +191,7 @@ test("discoverDeclaresTheExtension", async () => {
   assert.equal(value["resultType"], "complete");
   assert.equal(value["supportedVersions"][0], "2026-07-28");
   assert.deepEqual(value["capabilities"].resources, {});
-  assert.deepEqual(value["capabilities"].extensions["io.github.ambientcontextprotocol/context"], { version: "0.2.3" });
+  assert.deepEqual(value["capabilities"].extensions["io.github.ambientcontextprotocol/context"], { version: "0.2.4" });
   assert.deepEqual(value["_meta"]["io.modelcontextprotocol/serverInfo"], { name: "Editor", version: "2.3.0" });
 });
 
@@ -208,7 +208,7 @@ test("currentReturnsTheProtocolTheInstanceAndTheTree", async () => {
   const uri = "ambient://current";
   const current = documentOf(await responder.respond(request("resources/read", { params: { uri } })), uri);
   assert.deepEqual(Object.keys(current).sort(), ["instance", "protocol", "root"]);
-  assert.equal(current["protocol"], "0.2.3");
+  assert.equal(current["protocol"], "0.2.4");
   assert.equal(current["instance"], "k3f9x2");
 
   const root = current["root"];
@@ -425,7 +425,7 @@ test("theOlderHandshakeIsAnswered", async () => {
   assert.deepEqual(value["serverInfo"], { name: "Editor", version: "2.3.0" });
   assert.equal("resultType" in value, false);
   assert.deepEqual(value["capabilities"].resources, {});
-  assert.deepEqual(value["capabilities"].experimental, { "io.github.ambientcontextprotocol/context": { version: "0.2.3" } });
+  assert.deepEqual(value["capabilities"].experimental, { "io.github.ambientcontextprotocol/context": { version: "0.2.4" } });
 
   // A revision this server does not know is answered with one it does.
   const unknown = result(await responder.respond(legacy("initialize", { protocolVersion: "2030-01-01" }, null)));
@@ -475,7 +475,7 @@ function temporaryDirectory(): string {
 
 function descriptor(pid: number): ContextDescriptor {
   return {
-    protocol: "0.2.3", app: { id: "org.example.editor", name: "Editor", version: "2.3.0" },
+    protocol: "0.2.4", app: { id: "org.example.editor", name: "Editor", version: "2.3.0" },
     pid, instance: "k3f9x2", endpoint: "http://127.0.0.1:53124/mcp", token: "secret",
     started: "2026-11-09T21:14:03Z",
   };
@@ -496,7 +496,7 @@ test("theDescriptorIsWrittenPrivateWithItsSevenFields", (t) => {
 
   const written = JSON.parse(readFileSync(path, "utf8"));
   assert.deepEqual(Object.keys(written).sort(), ["app", "endpoint", "instance", "pid", "protocol", "started", "token"]);
-  assert.equal(written.protocol, "0.2.3");
+  assert.equal(written.protocol, "0.2.4");
   assert.equal(written.pid, 48211);
   assert.equal(written.endpoint, "http://127.0.0.1:53124/mcp");
   assert.deepEqual(written.app, { id: "org.example.editor", name: "Editor", version: "2.3.0" });
@@ -685,6 +685,31 @@ test("offDoesNotLook", async () => {
   const silent = makeResponder(false, { check: "off", report: () => assert.fail("reported"), current: () => el("w", "Window") });
   const uri = "ambient://current";
   assert.equal((await silent.respond(request("resources/read", { params: { uri } }))).status, 200);
+});
+
+// Sensitive (RFC-0007)
+
+async function marked(sensitive?: () => unknown): Promise<JSONObject> {
+  const responder = makeResponder(false, sensitive ? { sensitive: sensitive as never } : {});
+  const uri = "ambient://current";
+  return documentOf(await responder.respond(request("resources/read", { params: { uri } })), uri);
+}
+
+test("sensitiveIsSentAsTrueWhenSet", async () => {
+  const current = await marked(() => true);
+  assert.deepEqual(Object.keys(current).sort(), ["instance", "protocol", "root", "sensitive"]);
+  assert.equal(current["sensitive"], true);
+  assert.equal((await marked(async () => true))["sensitive"], true);
+});
+
+test("sensitiveIsAbsentWhenNotSet", async () => {
+  assert.equal("sensitive" in await marked(), false);
+});
+
+test("sensitiveIsNeverSentAsFalse", async () => {
+  for (const value of [false, undefined, null, "true", 1, {}]) {
+    assert.equal("sensitive" in await marked(() => value), false);
+  }
 });
 
 // Display (RFC-0005)

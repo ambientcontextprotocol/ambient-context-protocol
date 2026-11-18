@@ -2,7 +2,7 @@ import Foundation
 import Network
 import Observation
 
-// A provider for the Ambient Context Protocol, version 0.2.3: a small
+// A provider for the Ambient Context Protocol, version 0.2.4: a small
 // MCP server on the loopback interface that answers `current` and
 // `locate` as two resources, and the descriptor file that tells a host
 // where it is. It is handed a `ContextProvider` and knows nothing else
@@ -177,7 +177,7 @@ public enum ContextCheck: Sendable {
 public struct ContextResponder: Sendable {
     typealias App = ContextApp
 
-    public static let protocolVersion = "0.2.3"
+    public static let protocolVersion = "0.2.4"
     public static let extensionID = "io.github.ambientcontextprotocol/context"
     /// The path `ContextServer` listens on, and the default.
     public static let endpointPath = "/mcp"
@@ -211,10 +211,12 @@ public struct ContextResponder: Sendable {
     var current: @Sendable () async -> ContextElement
     /// Nil for a provider that leaves the wording to the host.
     var display: (@Sendable () async -> ContextDisplay?)?
-    /// The tree and its display read together, for a caller that can
-    /// take both at one moment. When set, it is used in place of
-    /// `current` and `display`.
-    var answer: (@Sendable () async -> (ContextElement, ContextDisplay?))?
+    /// Nil for a provider that never marks its answer sensitive.
+    var sensitive: (@Sendable () async -> Bool)?
+    /// The tree, its display and whether it is sensitive, read together,
+    /// for a caller that can take them at one moment. When set, it is
+    /// used in place of `current`, `display` and `sensitive`.
+    var answer: (@Sendable () async -> (ContextElement, ContextDisplay?, Bool))?
     /// Nil for a provider that does not report positions: the location
     /// template is then not offered and no location can be read.
     var locate: (@Sendable (String) async -> ContextLocation?)?
@@ -229,6 +231,7 @@ public struct ContextResponder: Sendable {
         app: App, instance: String, token: String,
         current: @escaping @Sendable () async -> ContextElement,
         display: (@Sendable () async -> ContextDisplay?)? = nil,
+        sensitive: (@Sendable () async -> Bool)? = nil,
         locate: (@Sendable (String) async -> ContextLocation?)? = nil
     ) {
         self.app = app
@@ -236,6 +239,7 @@ public struct ContextResponder: Sendable {
         self.token = token
         self.current = current
         self.display = display
+        self.sensitive = sensitive
         self.locate = locate
     }
 
@@ -250,16 +254,23 @@ public struct ContextResponder: Sendable {
     ///   - current: The tree, rooted at an `application`.
     ///   - display: The app's own words for what `current` holds. Nil,
     ///     or a closure that answers nil, leaves the wording to the host.
+    ///   - sensitive: Whether what `current` holds is likely private
+    ///     (RFC-0007). The answer carries `"sensitive": true` when it
+    ///     answers true and no such field otherwise. Nil never marks it.
     ///   - locate: Nil for a provider that does not report positions.
     public init(
         app: ContextApp, instance: String, token: String, path: String = ContextResponder.endpointPath,
         check: ContextCheck = .warn, report: (@Sendable (ContextIssue) -> Void)? = nil,
         current: @escaping @Sendable () async -> ContextElement,
         display: (@Sendable () async -> ContextDisplay?)? = nil,
+        sensitive: (@Sendable () async -> Bool)? = nil,
         locate: (@Sendable (String) async -> ContextLocation?)? = nil
     ) throws {
         guard path.hasPrefix("/"), !path.contains("?"), !path.contains("#") else { throw InvalidPath(path: path) }
-        self.init(app: app, instance: instance, token: token, current: current, display: display, locate: locate)
+        self.init(
+            app: app, instance: instance, token: token,
+            current: current, display: display, sensitive: sensitive, locate: locate
+        )
         self.path = path
         self.check = check
         if let report { self.report = report }
@@ -471,16 +482,19 @@ public struct ContextResponder: Sendable {
         if uri == Self.currentURI {
             let root: ContextElement
             let words: ContextDisplay?
+            let marked: Bool
             if let answer {
-                (root, words) = await answer()
+                (root, words, marked) = await answer()
             } else {
                 root = await current()
                 words = await display?()
+                marked = await sensitive?() ?? false
             }
             guard inspect(root) else { return nil }
-            watches?.remember(Self.signature(root, words))
+            watches?.remember(Self.signature(root, words, marked))
             return Self.json(CurrentResult(
-                protocol: Self.protocolVersion, instance: instance, display: words?.sent, root: root
+                protocol: Self.protocolVersion, instance: instance,
+                sensitive: marked ? true : nil, display: words?.sent, root: root
             ))
         }
         guard let locate, uri.hasPrefix(Self.locationPrefix),
@@ -491,20 +505,21 @@ public struct ContextResponder: Sendable {
     }
 
     /// What a watch compares to tell whether the answer to `current`
-    /// changed: the tree and the display as they would be sent, with
+    /// changed: the tree, the display and the mark as they would be sent, with
     /// `hovered` left out, since the pointer moving is not a change a
     /// watch reports. It stays in this process.
     func signature() async -> String? {
         if let answer {
-            let (root, words) = await answer()
-            return Self.signature(root, words)
+            let (root, words, marked) = await answer()
+            return Self.signature(root, words, marked)
         }
         let root = await current()
-        return Self.signature(root, await display?())
+        let words = await display?()
+        return Self.signature(root, words, await sensitive?() ?? false)
     }
 
-    private static func signature(_ root: ContextElement, _ words: ContextDisplay?) -> String? {
-        json(Signature(display: words?.sent, root: unhovered(root)))
+    private static func signature(_ root: ContextElement, _ words: ContextDisplay?, _ marked: Bool) -> String? {
+        json(Signature(sensitive: marked ? true : nil, display: words?.sent, root: unhovered(root)))
     }
 
     private static func unhovered(_ element: ContextElement) -> ContextElement {
@@ -515,6 +530,7 @@ public struct ContextResponder: Sendable {
     }
 
     private struct Signature: Encodable {
+        var sensitive: Bool?
         var display: ContextDisplay?
         var root: ContextElement
     }
@@ -530,10 +546,12 @@ public struct ContextResponder: Sendable {
     }
 
     /// The answer to `current`: these fields and no others. `display`
-    /// is left out when the provider has none.
+    /// is left out when the provider has none. `sensitive` is `true` or
+    /// left out, never `false`.
     private struct CurrentResult: Encodable {
         var `protocol`: String
         var instance: String
+        var sensitive: Bool?
         var display: ContextDisplay?
         var root: ContextElement
     }
@@ -791,6 +809,7 @@ public final class ContextServer {
     /// app and is read through `delegated`.
     private let provider: (any ContextProvider)?
     private let delegated: (@Sendable () async -> ContextElement)?
+    private let delegatedSensitive: (@Sendable () async -> Bool)?
     private let app: ContextResponder.App
     private let answersFor: ContextTarget?
     /// False for a provider that cannot tell when its answer changes,
@@ -812,6 +831,7 @@ public final class ContextServer {
     public init(provider: any ContextProvider, app: ContextApp, directory: URL = ContextDescriptor.defaultDirectory) {
         self.provider = provider
         self.delegated = nil
+        self.delegatedSensitive = nil
         self.app = app
         self.answersFor = nil
         self.offersWatch = true
@@ -832,12 +852,18 @@ public final class ContextServer {
     /// Pass `watch: false` unless the app tells this program when its
     /// answer changes, so that it can call `contextDidChange()`; a
     /// provider that cannot know of changes does not offer a watch.
+    ///
+    /// `sensitive` says whether what `current` holds is likely private
+    /// (RFC-0007): the answer carries `"sensitive": true` when it answers
+    /// true and no such field otherwise. Nil never marks it.
     public init(
         app: ContextApp, answersFor: ContextTarget, directory: URL = ContextDescriptor.defaultDirectory,
-        watch: Bool = true, current: @escaping @Sendable () async -> ContextElement
+        watch: Bool = true, sensitive: (@Sendable () async -> Bool)? = nil,
+        current: @escaping @Sendable () async -> ContextElement
     ) {
         self.provider = nil
         self.delegated = current
+        self.delegatedSensitive = sensitive
         self.app = app
         self.answersFor = answersFor
         self.offersWatch = watch
@@ -917,7 +943,7 @@ public final class ContextServer {
             responder.answer = {
                 await MainActor.run {
                     withObservationTracking {
-                        (provider.current(), provider.display())
+                        (provider.current(), provider.display(), provider.sensitive())
                     } onChange: {
                         watches.changed()
                     }
@@ -927,7 +953,9 @@ public final class ContextServer {
             // A provider for another app asks that app each time, so there
             // is nothing here to observe: it calls `contextDidChange()` when
             // the app tells it something moved.
-            responder = ContextResponder(app: app, instance: instance, token: token, current: delegated)
+            responder = ContextResponder(
+                app: app, instance: instance, token: token, current: delegated, sensitive: delegatedSensitive
+            )
         } else {
             return
         }

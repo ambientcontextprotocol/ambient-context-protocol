@@ -57,7 +57,7 @@ Scope and exclusions:
 
 ## 4. Specification changes
 
-**Section 7.1.** The closing sentence, "A provider answered by a different process than the app, and a provider without a token, are not defined by this version", becomes: "A provider answered by a different process than the app is defined only for a process the app started ([section 8](discovery.md#8-discovery)). A provider without a token is not defined by this version."
+**Section 7.1.** The closing sentence, "A provider answered by a different process than the app, and a provider without a token, are not defined by this version", becomes: "A provider answered by a different process than the app is defined only for a process the app started ([section 8](../spec/discovery.md#8-discovery)). A provider without a token is not defined by this version."
 
 **Section 8, the descriptor.** One row is added to the field table:
 
@@ -81,7 +81,7 @@ Step 4 gains:
 
 **Section 8, what this defends against.** One paragraph is added, the substance of section 6 below: the parent check shows that the operating system recorded the front app as the process that started the provider, and that cannot be arranged after the fact by writing a file. It does not show that the app's maker wrote or approved the provider: any extension the user has installed can have a helper, and a program already running as the user can register one. The rule trusts what the user has installed in the app.
 
-**Section 8.2.** The last paragraph, "A process that answers for an app it does not own has no bundle of that app to put a file in, and gets what step 3 gives. Answering for another program is not in this version", becomes: "A provider that answers for another app ([section 8](#8-discovery)) has no bundle of that app to put a file in. A host takes the favicon from the front app, as step 1 says, never from the provider's program, and so for a browser gets what step 3 gives unless the browser ships one."
+**Section 8.2.** The last paragraph, "A process that answers for an app it does not own has no bundle of that app to put a file in, and gets what step 3 gives. Answering for another program is not in this version", becomes: "A provider that answers for another app ([section 8](../spec/discovery.md#8-discovery)) has no bundle of that app to put a file in. A host takes the favicon from the front app, as step 1 says, never from the provider's program, and so for a browser gets what step 3 gives unless the browser ships one."
 
 **Section 8.1, the macOS profile.** The row "How a host learns which app is in front and which process is listening on a port" becomes "How a host learns which app is in front, which process is listening on a port, and which process started another", with the same answer.
 

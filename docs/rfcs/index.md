@@ -12,3 +12,4 @@ Every RFC that has a number, with its status. Acceptance does not mean the chang
 | RFC-0004 | [A provider started by the app it answers for](0004-a-provider-started-by-the-app.md) | Accepted | — | — |
 | RFC-0005 | [The app's words and favicon for what was read](0005-display-and-favicon.md) | Accepted | — | — |
 | RFC-0006 | [Watching current](0006-watching.md) | Accepted | — | — |
+| RFC-0007 | [An app says its context is sensitive](0007-sensitive-context.md) | Draft | — | Issue #1 |

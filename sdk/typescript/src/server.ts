@@ -9,7 +9,7 @@ import type { ContextContent, ContextDisplay, ContextElement, ContextLocation, C
 import { ContextTree } from "./tree.ts";
 import type { ContextIssue } from "./tree.ts";
 
-// A provider for the Ambient Context Protocol, version 0.2.2: a small MCP
+// A provider for the Ambient Context Protocol, version 0.2.3: a small MCP
 // server on the loopback interface that answers `current` and `locate`
 // as two resources, and the descriptor file that tells a host where it
 // is. It is handed a `ContextProvider` and knows nothing else about the
@@ -329,7 +329,7 @@ export interface ContextResponderOptions {
  * belongs in a log.
  */
 export class ContextResponder {
-  static readonly protocolVersion = "0.2.2";
+  static readonly protocolVersion = "0.2.3";
   static readonly extensionID = "io.github.ambientcontextprotocol/context";
   /** The path used when none is given. */
   static readonly endpointPath = "/mcp";
@@ -839,6 +839,18 @@ class ContextWatches {
 
 // MARK: - Descriptor
 
+/**
+ * The app a provider answers for when it is not that app's own process
+ * (RFC-0004): a helper the app started, such as the program a browser
+ * runs for an extension.
+ */
+export interface ContextTarget {
+  /** The identifier of the app answered for. */
+  id: string;
+  /** That app's process id, which must be this provider's parent. */
+  pid: number;
+}
+
 /** The file a running provider keeps so a host can find it. */
 export interface ContextDescriptor {
   protocol: string;
@@ -848,6 +860,12 @@ export interface ContextDescriptor {
   endpoint: string;
   token: string;
   started: string;
+  /**
+   * Set only by a provider that answers for another app, and written as
+   * `for`. `app` and `pid` then describe the provider's own program and
+   * process.
+   */
+  answersFor?: ContextTarget;
 }
 
 export const ContextDescriptor = {
@@ -858,6 +876,15 @@ export const ContextDescriptor = {
 
   fileName(bundleID: string, pid: number): string {
     return `${bundleID}.${pid}.json`;
+  },
+
+  /**
+   * The name of a descriptor that answers for another app: the app's
+   * identifier and process id first, so a host finds it by the app in
+   * front, then the provider's own process id.
+   */
+  fileNameFor(target: ContextTarget, pid: number): string {
+    return `${target.id}.${target.pid}.for.${pid}.json`;
   },
 
   /**
@@ -879,9 +906,13 @@ export const ContextDescriptor = {
       endpoint: descriptor.endpoint,
       token: descriptor.token,
       started: descriptor.started,
+      ...(descriptor.answersFor ? { for: { id: descriptor.answersFor.id, pid: descriptor.answersFor.pid } } : {}),
     }, 2);
 
-    const destination = join(directory, ContextDescriptor.fileName(descriptor.app.id, descriptor.pid));
+    const name = descriptor.answersFor
+      ? ContextDescriptor.fileNameFor(descriptor.answersFor, descriptor.pid)
+      : ContextDescriptor.fileName(descriptor.app.id, descriptor.pid);
+    const destination = join(directory, name);
     const temporary = join(directory, `.${randomUUID().toUpperCase()}.tmp`);
     try {
       writeFileSync(temporary, data, { mode: 0o600, flag: "wx" });
@@ -916,6 +947,29 @@ export const ContextDescriptor = {
       if (owner === pid || !isRunning(owner)) rmSync(join(directory, name), { force: true });
     }
   },
+
+  /**
+   * The same for descriptors that answer for the app `bundleID`: those
+   * whose provider is no longer running, and any naming `pid` itself.
+   */
+  removeStaleFor(bundleID: string, pid: number, directory: string): void {
+    let names: string[];
+    try {
+      names = readdirSync(directory);
+    } catch {
+      return;
+    }
+    const prefix = `${bundleID}.`, suffix = ".json";
+    for (const name of names) {
+      if (!name.startsWith(prefix) || !name.endsWith(suffix)) continue;
+      // `<app pid>.for.<provider pid>` is what is left of the name.
+      const match = /^[0-9]{1,10}\.for\.([0-9]{1,10})$/.exec(name.slice(prefix.length, name.length - suffix.length));
+      if (!match) continue;
+      const owner = Number(match[1]);
+      if (owner > 2 ** 31 - 1) continue;
+      if (owner === pid || !isRunning(owner)) rmSync(join(directory, name), { force: true });
+    }
+  },
 };
 
 function isRunning(pid: number): boolean {
@@ -934,6 +988,15 @@ function isRunning(pid: number): boolean {
 export interface ContextServerOptions {
   provider: ContextProvider;
   app: ContextApp;
+  /**
+   * For a provider that answers for another app, which started it
+   * (RFC-0004): that app. `app` then names this program, and the
+   * descriptor is written with `for`. The root of every answer must
+   * carry the `via` attribute. A provider that cannot tell when the
+   * app's answer changes should not be watched: it never calls
+   * `contextDidChange()`.
+   */
+  answersFor?: ContextTarget;
   /** Where the descriptor is kept. Defaults to `ContextDescriptor.defaultDirectory`. */
   directory?: string;
   /** As `ContextResponderOptions.check`. */
@@ -961,6 +1024,7 @@ export interface ContextServerOptions {
 export class ContextServer {
   #provider: ContextProvider;
   #app: ContextApp;
+  #answersFor: ContextTarget | undefined;
   #directory: string;
   #check: ContextServerOptions["check"];
   #report: ContextServerOptions["report"];
@@ -978,6 +1042,7 @@ export class ContextServer {
   constructor(options: ContextServerOptions) {
     this.#provider = options.provider;
     this.#app = { id: options.app.id, name: options.app.name, version: options.app.version };
+    this.#answersFor = options.answersFor ? { id: options.answersFor.id, pid: options.answersFor.pid } : undefined;
     this.#directory = options.directory ?? ContextDescriptor.defaultDirectory;
     this.#check = options.check;
     this.#report = options.report;
@@ -1017,7 +1082,8 @@ export class ContextServer {
     const token = ContextServer.random(32);
     const instance = ContextServer.random(6);
     const pid = process.pid;
-    ContextDescriptor.removeStale(this.#app.id, pid, this.#directory);
+    if (this.#answersFor) ContextDescriptor.removeStaleFor(this.#answersFor.id, pid, this.#directory);
+    else ContextDescriptor.removeStale(this.#app.id, pid, this.#directory);
 
     const provider = this.#provider;
     // Only a provider with `locate` answers it.
@@ -1080,6 +1146,7 @@ export class ContextServer {
         endpoint,
         token,
         started: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
+        ...(this.#answersFor ? { answersFor: this.#answersFor } : {}),
       }, this.#directory);
     } catch {
       // No descriptor: the listener runs and no host can find it.

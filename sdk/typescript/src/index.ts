@@ -25,4 +25,5 @@ export type {
   ContextHTTPResponse,
   ContextResponderOptions,
   ContextServerOptions,
+  ContextTarget,
 } from "./server.ts";

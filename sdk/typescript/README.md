@@ -1,8 +1,8 @@
 # Ambient Context for TypeScript
 
-Makes a desktop app built on Node, such as an Electron app, a provider of the Ambient Context Protocol, version 0.2.2: it runs the local server, answers the protocol's requests and keeps the descriptor file a host finds the app by. The app writes one thing, a tree of what the user has open and selected.
+Makes a desktop app built on Node, such as an Electron app, a provider of the Ambient Context Protocol, version 0.2.3: it runs the local server, answers the protocol's requests and keeps the descriptor file a host finds the app by. The app writes one thing, a tree of what the user has open and selected.
 
-Version 0.2.2 is defined by five accepted proposals until the specification is rewritten to match: [the element model](../../docs/rfcs/0001-element-model.md), [the shared listener](../../docs/rfcs/0002-shared-listener.md), [the hovered state](../../docs/rfcs/0003-hovered-state.md), [display and the favicon](../../docs/rfcs/0005-display-and-favicon.md) and [watching](../../docs/rfcs/0006-watching.md). Discovery, transport and trust are unchanged from [the 0.1 specification](../../docs/protocol-v0.md), sections 7 and 8.
+Version 0.2.3 is defined by six accepted proposals until the specification is rewritten to match: [the element model](../../docs/rfcs/0001-element-model.md), [the shared listener](../../docs/rfcs/0002-shared-listener.md), [the hovered state](../../docs/rfcs/0003-hovered-state.md), [display and the favicon](../../docs/rfcs/0005-display-and-favicon.md) [watching](../../docs/rfcs/0006-watching.md) and [a provider started by the app it answers for](../../docs/rfcs/0004-a-provider-started-by-the-app.md). Discovery, transport and trust are otherwise unchanged from [the 0.1 specification](../../docs/protocol-v0.md), sections 7 and 8.
 
 It uses Node's standard library only and has no dependencies. It is plain TypeScript with no build step: Node 22.18 or later runs the source directly, and a bundler takes it as it is. Like the protocol's discovery, it is for macOS. It began as a port of the [Swift package](../swift/README.md), name for name; that package is still at 0.1, so the two differ until it is carried over.
 
@@ -214,6 +214,20 @@ const notesContext: ContextProvider = {
 ```
 
 Return nothing for an id this run never issued, and `ContextLocation.gone(id)` for an element that was issued and no longer exists. Rectangles are in global display coordinates: points, origin at the top left of the primary display, y increasing downward. Elements do not declare in advance whether they can be located; a host asks. A provider without `locate` offers no location resource, and nothing else changes.
+
+## For an app that started this program
+
+A helper an app starts, such as a browser's native-messaging host, can answer for that app ([RFC-0004](../../docs/rfcs/0004-a-provider-started-by-the-app.md)). Pass `answersFor` with the app's identifier and process id, which must be this process's parent; `app` then names the helper. Put `via` on the root, such as `browser-extension`, and call `contextDidChange()` only if the app tells the helper of changes.
+
+```ts
+const server = new ContextServer({
+  provider,
+  app: { id: "org.example.helper", name: "Helper", version: "1.0.0" },
+  answersFor: { id: "com.google.Chrome", pid: process.ppid },
+});
+```
+
+The descriptor is written as `<app-id>.<app-pid>.for.<pid>.json`. A host accepts it only if the app in front started this process.
 
 ## Try it
 
